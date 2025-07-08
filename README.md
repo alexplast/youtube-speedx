@@ -1,10 +1,14 @@
 # YouTube SpeedX
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Version](https://img.shields.io/badge/Version-1.0.1-blue)
+[![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
+
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
 
-Your preferred settings are automatically saved and applied to new videos.
+![YouTube SpeedX Settings Menu](https://github.com/user-attachments/assets/9ba0cb9c-37bf-45c7-8200-918e43cb480c)
 
-## Features
+## ✨ Features
 
 - **Polished Settings Menu:** Easily configure the script through a professional UI activated by a hotkey (`Ctrl + Alt + S`).
 - **Custom Default Speed:** Set any default playback speed you like, without floating-point errors.
@@ -15,16 +19,15 @@ Your preferred settings are automatically saved and applied to new videos.
 - **Native UI Feedback:** Uses YouTube's built-in on-screen display for speed and resolution changes.
 - **Multi-Platform Support:** Works on YouTube, RuTube, Smotrim, Ivi, Twitch, VK Video, Telegram Web, and Yandex.Disk.
 
-## Installation
+## 🚀 Installation
 
 1.  Install a userscript manager extension for your browser, such as:
     - [Tampermonkey](https://www.tampermonkey.net/) (Recommended)
-    - [Greasemonkey](https://www.greasespot.net/)
     - [Violentmonkey](https://violentmonkey.github.io/)
 2.  **[Click here to install the script](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)**
     *After clicking the link, your userscript manager should open and prompt you for installation.*
 
-## Usage
+## 🛠️ Usage
 
 ### Settings Menu
 
@@ -43,3 +46,11 @@ The script uses physical key locations (`event.code`), so these hotkeys will wor
 -   `S` key (with `Ctrl+Alt`): Open the settings menu (`KeyS`).
 
 *Note: Hotkeys can be changed in the settings menu and will not trigger if you are typing in a text field or if the settings menu is open.*
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/alexplast/youtube-speedx/issues).
+
+## 📝 License
+
+This project is [MIT](https://github.com/alexplast/youtube-speedx/blob/main/LICENSE) licensed.

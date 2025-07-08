@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         YouTube SpeedX
-// @namespace    https://github.com/alexplast
-// @version      1.0.0
+// @namespace    https://github.com/alexplast/youtube-speedx
+// @version      1.0.1
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
-// @author       alexplast
+// @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
 // @icon         https://www.google.com/s2/favicons?domain=youtube.com
 // @match        https://*.rutube.ru/*
