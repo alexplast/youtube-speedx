@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      1.0.1
+// @version      1.0.2
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -166,41 +166,101 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const initSettingsUI = () => {
-        const modalHTML = `
-            <div id="yt-speedx-overlay"></div><div id="yt-speedx-modal">
-                <div class="yt-speedx-modal-header"><h2>YouTube SpeedX Settings</h2><button id="yt-speedx-close-btn">&times;</button></div>
-                <div class="yt-speedx-modal-body">
-                    <div class="yt-speedx-grid">
-                        <label for="yt-speedx-speed">Default Speed</label>
-                        <input type="number" id="yt-speedx-speed" step="0.1" min="0.1" max="16">
-                        <label for="yt-speedx-res">Default Resolution</label>
-                        <select id="yt-speedx-res">
-                            <option value="auto">Auto</option>
-                            <option value="hd2160">2160p (4K)</option>
-                            <option value="hd1440">1440p</option>
-                            <option value="hd1080">1080p</option>
-                            <option value="hd720">720p</option>
-                            <option value="large">480p</option>
-                            <option value="medium">360p</option>
-                            <option value="small">240p</option>
-                            <option value="tiny">144p</option>
-                        </select>
-                        <label for="yt-speedx-h264">Force H.264 Codec</label>
-                        <input type="checkbox" id="yt-speedx-h264" class="yt-speedx-checkbox">
-                    </div>
-                    <hr>
-                    <h3>Hotkeys <small>(uses physical key location)</small></h3>
-                    <div class="yt-speedx-grid">
-                        <label>Decrease Speed</label><input type="text" id="yt-speedx-dec-key" class="yt-speedx-hotkey-input" readonly>
-                        <label>Increase Speed</label><input type="text" id="yt-speedx-inc-key" class="yt-speedx-hotkey-input" readonly>
-                        <label>Decrease Resolution</label><input type="text" id="yt-speedx-res-down-key" class="yt-speedx-hotkey-input" readonly>
-                        <label>Increase Resolution</label><input type="text" id="yt-speedx-res-up-key" class="yt-speedx-hotkey-input" readonly>
-                        <label>Open Settings (Ctrl+Alt+)</label><input type="text" id="yt-speedx-settings-key" class="yt-speedx-hotkey-input" readonly>
-                    </div>
-                </div>
-                <div class="yt-speedx-modal-footer"><button id="yt-speedx-save-btn">Save and Close</button></div>
-            </div>`;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        // --- Create elements programmatically to avoid TrustedHTML errors ---
+        const overlay = document.createElement('div');
+        overlay.id = 'yt-speedx-overlay';
+
+        const modal = document.createElement('div');
+        modal.id = 'yt-speedx-modal';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'yt-speedx-modal-header';
+        const title = document.createElement('h2');
+        title.textContent = 'YouTube SpeedX Settings';
+        const closeBtn = document.createElement('button');
+        closeBtn.id = 'yt-speedx-close-btn';
+        closeBtn.textContent = '\u00d7'; // Use unicode escape for '×'
+        header.append(title, closeBtn);
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'yt-speedx-modal-body';
+
+        // --- Settings Grid ---
+        const settingsGrid = document.createElement('div');
+        settingsGrid.className = 'yt-speedx-grid';
+
+        const speedLabel = document.createElement('label');
+        speedLabel.htmlFor = 'yt-speedx-speed';
+        speedLabel.textContent = 'Default Speed';
+        const speedInput = document.createElement('input');
+        Object.assign(speedInput, { type: 'number', id: 'yt-speedx-speed', step: '0.1', min: '0.1', max: '16' });
+
+        const resLabel = document.createElement('label');
+        resLabel.htmlFor = 'yt-speedx-res';
+        resLabel.textContent = 'Default Resolution';
+        const resSelect = document.createElement('select');
+        resSelect.id = 'yt-speedx-res';
+        const resolutions = {
+            "auto": "Auto", "hd2160": "2160p (4K)", "hd1440": "1440p", "hd1080": "1080p",
+            "hd720": "720p", "large": "480p", "medium": "360p", "small": "240p", "tiny": "144p"
+        };
+        for (const [value, text] of Object.entries(resolutions)) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            resSelect.appendChild(option);
+        }
+
+        const h264Label = document.createElement('label');
+        h264Label.htmlFor = 'yt-speedx-h264';
+        h264Label.textContent = 'Force H.264 Codec';
+        const h264Input = document.createElement('input');
+        Object.assign(h264Input, { type: 'checkbox', id: 'yt-speedx-h264', className: 'yt-speedx-checkbox' });
+
+        settingsGrid.append(speedLabel, speedInput, resLabel, resSelect, h264Label, h264Input);
+
+        const hr = document.createElement('hr');
+
+        // --- Hotkeys ---
+        const hotkeysTitle = document.createElement('h3');
+        const smallText = document.createElement('small');
+        smallText.textContent = '(uses physical key location)';
+        hotkeysTitle.append('Hotkeys ', smallText); // Create composite title safely
+
+        const hotkeysGrid = document.createElement('div');
+        hotkeysGrid.className = 'yt-speedx-grid';
+
+        const hotkeyConfigs = [
+            { id: 'dec-key', label: 'Decrease Speed' }, { id: 'inc-key', label: 'Increase Speed' },
+            { id: 'res-down-key', label: 'Decrease Resolution' }, { id: 'res-up-key', label: 'Increase Resolution' },
+            { id: 'settings-key', label: 'Open Settings (Ctrl+Alt+)' }
+        ];
+
+        for (const config of hotkeyConfigs) {
+            const label = document.createElement('label');
+            label.textContent = config.label;
+            const input = document.createElement('input');
+            input.id = `yt-speedx-${config.id}`;
+            Object.assign(input, { type: 'text', className: 'yt-speedx-hotkey-input', readOnly: true });
+            hotkeysGrid.append(label, input);
+        }
+
+        body.append(settingsGrid, hr, hotkeysTitle, hotkeysGrid);
+
+        // --- Footer ---
+        const footer = document.createElement('div');
+        footer.className = 'yt-speedx-modal-footer';
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'yt-speedx-save-btn';
+        saveBtn.textContent = 'Save and Close';
+        footer.appendChild(saveBtn);
+
+        // --- Assemble and Append ---
+        modal.append(header, body, footer);
+        document.body.append(overlay, modal);
+        
         GM_addStyle(`
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
             #yt-speedx-modal { display: none; position: fixed; z-index: 2501; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #212121; color: #fff; border: 1px solid #3e3e3e; border-radius: 12px; width: 500px; font-family: "Roboto", "Arial", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -222,6 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
             #yt-speedx-save-btn { background: #3ea6ff; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 1em; font-weight: 500; transition: background 0.2s; }
             #yt-speedx-save-btn:hover { background: #66bfff; }
         `);
+
+        // --- UI Logic ---
         const openModal = () => {
             document.getElementById('yt-speedx-speed').value = CONFIG.speed;
             document.getElementById('yt-speedx-res').value = CONFIG.resolution;
@@ -231,12 +293,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('yt-speedx-res-down-key').value = CONFIG.RES_DOWN_KEY;
             document.getElementById('yt-speedx-res-up-key').value = CONFIG.RES_UP_KEY;
             document.getElementById('yt-speedx-settings-key').value = CONFIG.SETTINGS_KEY;
-            document.getElementById('yt-speedx-overlay').style.display = 'block';
-            document.getElementById('yt-speedx-modal').style.display = 'block';
+            overlay.style.display = 'block';
+            modal.style.display = 'block';
         };
         const closeModal = () => {
-            document.getElementById('yt-speedx-overlay').style.display = 'none';
-            document.getElementById('yt-speedx-modal').style.display = 'none';
+            overlay.style.display = 'none';
+            modal.style.display = 'none';
         };
         const saveAndClose = () => {
             CONFIG.speed = parseFloat(document.getElementById('yt-speedx-speed').value);
@@ -250,9 +312,11 @@ document.addEventListener('DOMContentLoaded', () => {
             saveConfig();
             closeModal();
         };
-        document.getElementById('yt-speedx-save-btn').addEventListener('click', saveAndClose);
-        document.getElementById('yt-speedx-close-btn').addEventListener('click', closeModal);
-        document.getElementById('yt-speedx-overlay').addEventListener('click', closeModal);
+
+        saveBtn.addEventListener('click', saveAndClose);
+        closeBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', closeModal);
+
         document.querySelectorAll('.yt-speedx-hotkey-input').forEach(input => {
             const originalValue = input.value;
             input.addEventListener('focus', () => { input.value = 'Press a key...'; });
@@ -262,6 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (e.code) { input.value = e.code; input.blur(); }
             });
         });
+
         return { openModal };
     };
 
