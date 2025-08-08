@@ -1,0 +1,46 @@
+name: Automatic Release on Push to Main
+
+on:
+  push:
+    branches:
+      - main # Запускается только при пуше в ветку main
+
+permissions:
+  contents: write # Необходимо для создания тега и релиза
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Получаем всю историю, чтобы можно было найти предыдущие теги
+          fetch-depth: 0
+
+      - name: Get Version from userscript
+        id: get_version
+        # Ищем строку, содержащую "@version", извлекаем номер версии с помощью утилиты sed
+        run: echo "VERSION=$(grep "@version" youtubespeedx.userscript.js | sed -n 's/.*@version\s*//p')" >> $GITHUB_OUTPUT
+
+      - name: Check if tag already exists
+        # Проверяем, существует ли уже тег для этой версии, чтобы избежать ошибок
+        run: |
+          if git rev-parse "v${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.get_version.outputs.VERSION }} already exists. Skipping release."
+            exit 78 # Специальный код выхода для пропуска шагов
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        # Этот шаг выполняется, только если тег не был найден на предыдущем шаге
+        if: success()
+        with:
+          # Создаем тег и релиз с именем на основе извлеченной версии
+          tag_name: "v${{ steps.get_version.outputs.VERSION }}"
+          name: "Release v${{ steps.get_version.outputs.VERSION }}"
+          # Автоматически извлекает описание из CHANGELOG.md
+          body_path: "CHANGELOG.md"
+          # Прикрепляет указанный файл к релизу
+          files: youtubespeedx.userscript.js
+          token: ${{ secrets.GITHUB_TOKEN }}
