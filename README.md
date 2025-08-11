@@ -1,7 +1,7 @@
 # YouTube SpeedX
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.0.0-blue)
+![Version](https://img.shields.io/badge/Version-2.1.0-blue)
 [![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
 
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
@@ -13,6 +13,7 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 - **Polished Settings Menu:** Easily configure the script through a professional UI activated by a hotkey (`Ctrl + Alt + S`).
 - **Custom Default Speed:** Set any default playback speed you like, without floating-point errors.
 - **Customizable Speed Step:** Configure the increment/decrement value for speed changes in the settings menu.
+- **Smart FPS Control:** Set a maximum resolution for 60 FPS videos (e.g., limit to 1080p60 or 720p60) or disable them completely to match your hardware's capabilities.
 - **Dropdown for Resolution:** Choose your preferred default resolution from a clean dropdown list.
 - **Persistent Settings:** Remembers your speed, resolution, and feature choices.
 - **Customizable Hotkeys:** Reliably change the hotkeys for all actions using their physical location on the keyboard (`event.code`).

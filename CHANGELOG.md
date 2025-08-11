@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.1.0] - 2025-08-08
+
+### Added
+- **Smart FPS Control:** Introduced a new setting to limit high-framerate (60 FPS) video to a specific resolution. Users can now choose to cap 60 FPS playback at 1080p, 720p, 480p, or disable it entirely to match their hardware capabilities.
+- **Automatic Quality Fallback:** If the user's preferred resolution is filtered out by the Smart FPS Control (e.g., 1080p60 is disabled), the script will automatically apply the next best available quality.
+
+### Changed
+- **Enhanced Settings UI:** Replaced the simple "Disable 60 FPS" checkbox with a more flexible dropdown menu for managing high-framerate formats.
+- **Refactored Quality Filtering:** The internal logic for filtering video formats was completely reworked to reliably patch the YouTube player's `getAvailableQualityData` method, ensuring stability and accuracy.
+
+### Fixed
+- **Settings Menu Order:** Dropdown options in the settings UI are now populated using arrays to guarantee a consistent and logical order of resolutions and FPS limits across all browsers.
+- **Initial 60 FPS bug:** The previous implementation attempts to filter 60 FPS videos were unreliable; this has been fixed with the new player patching method.
+
 ## [2.0.0] - 2025-08-08
 
 ### Added

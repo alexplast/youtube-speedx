@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.0.0
+// @version      2.1.0
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -33,6 +33,7 @@ const CONFIG = {
     speed: 2.3,
     resolution: "hd1080",
     useH264: true,
+    max60FpsQuality: 'unlimited', // 'unlimited', '1080', '720', '480', 'disabled'
     ADJUSTMENT_STEP: 0.1,
     DECREASE_KEY: 'BracketLeft',
     INCREASE_KEY: 'BracketRight',
@@ -50,6 +51,7 @@ const loadConfig = () => {
         if (storedConfig.speed !== undefined) CONFIG.speed = storedConfig.speed;
         if (storedConfig.resolution !== undefined) CONFIG.resolution = storedConfig.resolution;
         if (storedConfig.useH264 !== undefined) CONFIG.useH264 = storedConfig.useH264;
+        if (storedConfig.max60FpsQuality !== undefined) CONFIG.max60FpsQuality = storedConfig.max60FpsQuality;
         if (storedConfig.ADJUSTMENT_STEP !== undefined) CONFIG.ADJUSTMENT_STEP = storedConfig.ADJUSTMENT_STEP;
         if (storedConfig.DECREASE_KEY && storedConfig.DECREASE_KEY.length > 1) {
             if (storedConfig.DECREASE_KEY) CONFIG.DECREASE_KEY = storedConfig.DECREASE_KEY;
@@ -67,7 +69,7 @@ const saveConfig = () => {
     } catch (e) { /* Fail silently */ }
 };
 
-// --- H.264 Codec Enforcement (RUNS AT DOCUMENT-START) ---
+// --- EARLY EXECUTION LOGIC (RUNS AT DOCUMENT-START) ---
 loadConfig();
 if (CONFIG.useH264) {
     (function () {
@@ -80,6 +82,7 @@ if (CONFIG.useH264) {
         }
     })();
 }
+// Note: 60fps logic is now handled after DOM load by patching the player object directly.
 
 // --- ALL DOM-DEPENDENT LOGIC RUNS AFTER DOM IS LOADED ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -140,16 +143,25 @@ document.addEventListener('DOMContentLoaded', () => {
             this.updateDurationDisplay(this.getPlayer());
         },
         applyResolution: function(player) {
-            if (typeof player?.getAvailableQualityLevels !== 'function' || !CONFIG.resolution) return;
-            if (player.getAvailableQualityLevels().includes(CONFIG.resolution)) {
-                player.setPlaybackQualityRange(CONFIG.resolution);
+            if (!player || typeof player.getAvailableQualityLevels !== 'function') return;
+            
+            const availableLevels = player.getAvailableQualityLevels(); // Already filtered by our patch
+            const desiredLevel = CONFIG.resolution;
+
+            if (availableLevels.includes(desiredLevel)) {
+                player.setPlaybackQualityRange(desiredLevel);
+            } else if (availableLevels.length > 0) {
+                const bestAvailable = availableLevels[0]; // The list is sorted from best to worst
+                player.setPlaybackQualityRange(bestAvailable);
             }
         },
         changeResolution: function(direction) {
             const player = this.getPlayer();
             if (typeof player?.getAvailableQualityLevels !== 'function') return;
             const availableQualities = player.getAvailableQualityLevels();
-            if (!availableQualities || availableQualities.length === 0) return;
+            if (!availableQualities || availableQualities.length === 0) {
+                return;
+            }
             const currentQuality = player.getPlaybackQuality();
             const currentIndex = availableQualities.indexOf(currentQuality);
             let newIndex = currentIndex;
@@ -161,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.setPlaybackQualityRange(newQuality);
                 CONFIG.resolution = newQuality;
                 saveConfig();
-                const qualityData = player.getAvailableQualityData().find(q => q.quality === newQuality);
+                const qualityData = player.getAvailableQualityData(true).find(q => q.quality === newQuality);
                 this.showBezelNotification(qualityData ? qualityData.qualityLabel : newQuality);
             }
         }
@@ -177,22 +189,68 @@ document.addEventListener('DOMContentLoaded', () => {
         resolve();
     })));
 
+    const patchPlayerForFPS = (player) => {
+        if (!player || player.isPatchedForFPS) {
+            return;
+        }
+
+        const originalGetAvailableQualityData = player.getAvailableQualityData;
+        
+        player.getAvailableQualityData = function(bypassFilter = false) {
+            const allFormats = originalGetAvailableQualityData.apply(player, arguments);
+            if (bypassFilter || CONFIG.max60FpsQuality === 'unlimited') {
+                return allFormats;
+            }
+
+            const qualityHeightMap = { '1080': 1080, '720': 720, '480': 480, 'disabled': 0 };
+            const limit = qualityHeightMap[CONFIG.max60FpsQuality];
+            
+            if (typeof limit === 'undefined') return allFormats;
+
+            return allFormats.filter(format => {
+                if (format && typeof format.qualityLabel === 'string') {
+                    const match = format.qualityLabel.match(/(\d+)p(\d+)?/);
+                    if (match) {
+                        const height = parseInt(match[1], 10);
+                        const fps = match[2] ? parseInt(match[2], 10) : 30;
+                        
+                        if (fps > 30 && height > limit) {
+                             return false;
+                        }
+                    }
+                }
+                return true;
+            });
+        };
+        
+        player.getAvailableQualityLevels = function() {
+            const qualityData = player.getAvailableQualityData(); // Calls our patched version
+            return qualityData.map(format => format.quality);
+        }
+
+        player.isPatchedForFPS = true;
+    };
+
     const setupPlayer = () => {
+        const player = activeAdapter.getPlayer();
         const videoElement = activeAdapter.getVideoElement();
+
+        if (player && activeAdapter.name === 'YouTube') {
+            patchPlayerForFPS(player);
+        }
+
         if (videoElement) {
             activeAdapter.applySpeed(videoElement, CONFIG.speed);
-            activeAdapter.applyResolution(activeAdapter.getPlayer());
+            activeAdapter.applyResolution(player);
         }
     };
 
     const initSettingsUI = () => {
-        // --- Create elements programmatically ---
         const overlay = document.createElement('div');
         overlay.id = 'yt-speedx-overlay';
         const modal = document.createElement('div');
         modal.id = 'yt-speedx-modal';
 
-        // Header
         const header = document.createElement('div');
         header.className = 'yt-speedx-modal-header';
         const title = document.createElement('h2');
@@ -202,7 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
         closeBtn.textContent = '\u00d7';
         header.append(title, closeBtn);
 
-        // Body
         const body = document.createElement('div');
         body.className = 'yt-speedx-modal-body';
         const settingsGrid = document.createElement('div');
@@ -221,16 +278,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const [stepLabel, stepInput] = createInput('Adjustment Step', 'step', 'input', { type: 'number', step: '0.05', min: '0.05', max: '5' });
 
         const [resLabel, resSelect] = createInput('Default Resolution', 'res', 'select');
-        const resolutions = {"auto": "Auto", "hd2160": "2160p (4K)", "hd1440": "1440p", "hd1080": "1080p", "hd720": "720p", "large": "480p", "medium": "360p", "small": "240p", "tiny": "144p"};
-        for (const [value, text] of Object.entries(resolutions)) {
+        const resolutions = [
+            { value: "auto", text: "Auto" },
+            { value: "hd2160", text: "2160p (4K)" },
+            { value: "hd1440", text: "1440p" },
+            { value: "hd1080", text: "1080p" },
+            { value: "hd720", text: "720p" },
+            { value: "large", text: "480p" },
+            { value: "medium", text: "360p" },
+            { value: "small", text: "240p" },
+            { value: "tiny", text: "144p" }
+        ];
+        for (const res of resolutions) {
             const option = document.createElement('option');
-            option.value = value;
-            option.textContent = text;
+            option.value = res.value;
+            option.textContent = res.text;
             resSelect.appendChild(option);
+        }
+        
+        const [maxFpsQualityLabel, maxFpsQualitySelect] = createInput('Max 60 FPS Quality', 'max-fps-quality', 'select');
+        const fpsQualities = [
+            { value: 'unlimited', text: 'Unlimited' },
+            { value: '1080', text: 'Max 1080p' },
+            { value: '720', text: 'Max 720p' },
+            { value: '480', text: 'Max 480p' },
+            { value: 'disabled', text: 'Disable 60 FPS' }
+        ];
+         for (const quality of fpsQualities) {
+            const option = document.createElement('option');
+            option.value = quality.value;
+            option.textContent = quality.text;
+            maxFpsQualitySelect.appendChild(option);
         }
 
         const [h264Label, h264Input] = createInput('Force H.264 Codec', 'h264', 'input', { type: 'checkbox', className: 'yt-speedx-checkbox' });
-        settingsGrid.append(speedLabel, speedInput, stepLabel, stepInput, resLabel, resSelect, h264Label, h264Input);
+        settingsGrid.append(speedLabel, speedInput, stepLabel, stepInput, resLabel, resSelect, maxFpsQualityLabel, maxFpsQualitySelect, h264Label, h264Input);
 
         const hr = document.createElement('hr');
         const hotkeysTitle = document.createElement('h3');
@@ -253,7 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         body.append(settingsGrid, hr, hotkeysTitle, hotkeysGrid);
 
-        // Footer
         const footer = document.createElement('div');
         footer.className = 'yt-speedx-modal-footer';
         const saveBtn = document.createElement('button');
@@ -291,6 +372,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('yt-speedx-step').value = CONFIG.ADJUSTMENT_STEP;
             document.getElementById('yt-speedx-res').value = CONFIG.resolution;
             document.getElementById('yt-speedx-h264').checked = CONFIG.useH264;
+            document.getElementById('yt-speedx-max-fps-quality').value = CONFIG.max60FpsQuality;
             document.getElementById('yt-speedx-dec-key').value = CONFIG.DECREASE_KEY;
             document.getElementById('yt-speedx-inc-key').value = CONFIG.INCREASE_KEY;
             document.getElementById('yt-speedx-res-down-key').value = CONFIG.RES_DOWN_KEY;
@@ -307,12 +389,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const saveAndClose = () => {
             const wasH264Enabled = CONFIG.useH264;
-            const isH264Enabled = document.getElementById('yt-speedx-h264').checked;
-
+            const wasMaxFpsQuality = CONFIG.max60FpsQuality;
+            
             CONFIG.speed = parseFloat(document.getElementById('yt-speedx-speed').value);
             CONFIG.ADJUSTMENT_STEP = parseFloat(document.getElementById('yt-speedx-step').value);
             CONFIG.resolution = document.getElementById('yt-speedx-res').value;
-            CONFIG.useH264 = isH264Enabled;
+            CONFIG.useH264 = document.getElementById('yt-speedx-h264').checked;
+            CONFIG.max60FpsQuality = document.getElementById('yt-speedx-max-fps-quality').value;
             CONFIG.DECREASE_KEY = document.getElementById('yt-speedx-dec-key').value;
             CONFIG.INCREASE_KEY = document.getElementById('yt-speedx-inc-key').value;
             CONFIG.RES_DOWN_KEY = document.getElementById('yt-speedx-res-down-key').value;
@@ -322,8 +405,8 @@ document.addEventListener('DOMContentLoaded', () => {
             saveConfig();
             closeModal();
 
-            if (wasH264Enabled !== isH264Enabled) {
-                alert("Настройки кодека (H.264) вступят в силу после перезагрузки страницы.");
+            if (wasH264Enabled !== CONFIG.useH264 || wasMaxFpsQuality !== CONFIG.max60FpsQuality) {
+                alert("Настройки кодека или частоты кадров вступят в силу после перезагрузки страницы.");
             }
         };
 
@@ -345,11 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const { openModal } = initSettingsUI();
     (async () => {
-        await waitElementsLoaded('video');
+        await waitElementsLoaded('video', '#movie_player');
         setupPlayer();
-        // For single-page applications like YouTube
         if (activeAdapter.name === 'YouTube') {
-            window.addEventListener('yt-page-data-updated', () => waitElementsLoaded('video').then(setupPlayer));
+            window.addEventListener('yt-page-data-updated', () => waitElementsLoaded('video', '#movie_player').then(setupPlayer));
         }
     })();
 
