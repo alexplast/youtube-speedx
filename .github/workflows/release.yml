@@ -31,6 +31,21 @@ jobs:
             exit 78 # Специальный код выхода для пропуска шагов
           fi
 
+      - name: Extract Release Notes from CHANGELOG
+        id: extract_notes
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          # Используем awk для извлечения содержимого для конкретной версии.
+          # Он начинает печать после нахождения строки с тегом текущей версии
+          # и останавливается, когда находит следующий тег версии или конец файла.
+          awk '/^## \['"$VERSION"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > releasenotes.md
+          
+          # Проверяем, что файл не пустой, иначе версия в CHANGELOG.md не найдена.
+          if [ ! -s releasenotes.md ]; then
+            echo "Error: Release notes for version v${VERSION} not found in CHANGELOG.md."
+            exit 1
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         # Этот шаг выполняется, только если тег не был найден на предыдущем шаге
@@ -39,8 +54,8 @@ jobs:
           # Создаем тег и релиз с именем на основе извлеченной версии
           tag_name: "v${{ steps.get_version.outputs.VERSION }}"
           name: "Release v${{ steps.get_version.outputs.VERSION }}"
-          # Автоматически извлекает описание из CHANGELOG.md
-          body_path: "CHANGELOG.md"
+          # Автоматически извлекает описание из временного файла с заметками
+          body_path: "releasenotes.md"
           # Прикрепляет указанный файл к релизу
           files: youtubespeedx.userscript.js
           token: ${{ secrets.GITHUB_TOKEN }}
