@@ -6,8 +6,6 @@
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
 // @icon         https://www.google.com/s2/favicons?domain=youtube.com
-// @match        https://*.rutube.ru/*
-// @icon         https://www.google.com/s2/favicons?domain=rutube.ru
 // @match        https://*.smotrim.ru/*
 // @icon         https://www.google.com/s2/favicons?domain=smotrim.ru
 // @match        https://*.ivi.ru/*
