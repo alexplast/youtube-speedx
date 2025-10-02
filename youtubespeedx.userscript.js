@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.1.2
+// @version      2.1.3
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -72,11 +72,37 @@ loadConfig();
 if (CONFIG.useH264) {
     (function () {
         'use strict';
-        if (window.MediaSource && typeof MediaSource.isTypeSupported === 'function') {
-            try { delete MediaSource.isTypeSupported; } catch (e) { /* Fail silently */ }
+        const originalIsTypeSupported = window.MediaSource?.isTypeSupported;
+        const originalDecodingInfo = navigator.mediaCapabilities?.decodingInfo;
+
+        const isCodecBlocked = (codecString) => {
+            if (!codecString) return false;
+            // Блокируем кодеки VP8, VP9 и AV1
+            const blockedCodecs = ['vp8', 'vp9', 'vp09', 'av1', 'av01'];
+            return blockedCodecs.some(blocked => codecString.includes(blocked));
+        };
+
+        if (originalIsTypeSupported) {
+            MediaSource.isTypeSupported = function(type) {
+                if (isCodecBlocked(type)) {
+                    return false; // Сообщаем, что кодек не поддерживается
+                }
+                return originalIsTypeSupported.apply(this, arguments);
+            };
         }
-        if (navigator.mediaCapabilities && typeof navigator.mediaCapabilities.decodingInfo === 'function') {
-             try { delete navigator.mediaCapabilities.decodingInfo; } catch (e) { /* Fail silently */ }
+
+        if (originalDecodingInfo) {
+            navigator.mediaCapabilities.decodingInfo = function(info) {
+                if (isCodecBlocked(info?.video?.contentType)) {
+                    // Возвращаем Promise, который говорит, что кодек не поддерживается
+                    return Promise.resolve({
+                        supported: false,
+                        smooth: false,
+                        powerEfficient: false
+                    });
+                }
+                return originalDecodingInfo.apply(this, arguments);
+            };
         }
     })();
 }
@@ -429,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await waitElementsLoaded('video', '#movie_player');
         setupPlayer();
         if (activeAdapter.name === 'YouTube') {
-            window.addEventListener('yt-page-data-updated', () => waitElementsLoaded('video', '#movie_player').then(setupPlayer));
+            window.addEventListener('yt-page-data-updated', () => waitElementsLoaded('video', 'movie_player').then(setupPlayer));
         }
     })();
 
