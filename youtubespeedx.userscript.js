@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.1.3
+// @version      2.1.4
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -208,10 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeAdapter = getActiveAdapter();
 
     const sleep = async timeout => new Promise(resolve => setTimeout(resolve, timeout));
-    const waitElementsLoaded = async (...elementsQueries) => Promise.all(elementsQueries.map(async ele => new Promise(async resolve => {
-        while (!document.querySelector(ele)) await sleep(100);
-        resolve();
-    })));
 
     const patchPlayerForFPS = (player) => {
         if (!player || player.isPatchedForFPS) {
@@ -255,17 +251,32 @@ document.addEventListener('DOMContentLoaded', () => {
         player.isPatchedForFPS = true;
     };
 
-    const setupPlayer = () => {
-        const player = activeAdapter.getPlayer();
-        const videoElement = activeAdapter.getVideoElement();
-
-        if (player && activeAdapter.name === 'YouTube') {
-            patchPlayerForFPS(player);
+    const initializePlayer = async () => {
+        // Only YouTube needs this special handling for SPA navigation.
+        if (activeAdapter.name !== 'YouTube') {
+            const video = activeAdapter.getVideoElement();
+            if (video) activeAdapter.applySpeed(video, CONFIG.speed);
+            return;
         }
 
-        if (videoElement) {
-            activeAdapter.applySpeed(videoElement, CONFIG.speed);
-            activeAdapter.applyResolution(player);
+        let player;
+        let attempts = 0;
+        const maxAttempts = 20; // Wait for up to 10 seconds.
+
+        while (attempts < maxAttempts) {
+            player = activeAdapter.getPlayer();
+            // Check if player element exists and its API is ready.
+            if (player && typeof player.getPlaybackRate === 'function' && typeof player.getAvailableQualityData === 'function') {
+                const videoElement = activeAdapter.getVideoElement();
+                if (videoElement) {
+                    patchPlayerForFPS(player);
+                    activeAdapter.applySpeed(videoElement, CONFIG.speed);
+                    activeAdapter.applyResolution(player);
+                    return; // Success
+                }
+            }
+            await sleep(500); // Wait before retrying
+            attempts++;
         }
     };
 
@@ -451,13 +462,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const { openModal } = initSettingsUI();
-    (async () => {
-        await waitElementsLoaded('video', '#movie_player');
-        setupPlayer();
-        if (activeAdapter.name === 'YouTube') {
-            window.addEventListener('yt-page-data-updated', () => waitElementsLoaded('video', 'movie_player').then(setupPlayer));
-        }
-    })();
+
+    // Initial setup on page load
+    initializePlayer();
+
+    // Re-initialize on every YouTube navigation event.
+    if (activeAdapter.name === 'YouTube') {
+        window.addEventListener('yt-navigate-finish', initializePlayer);
+    }
 
     window.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.altKey && event.code === CONFIG.SETTINGS_KEY) {

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.1.4] - 2025-10-10
+
+### Fixed
+- **Player Re-initialization:** Fixed a critical bug where speed and quality settings would not apply when navigating to a new video on YouTube without a full page reload. The script now reliably re-initializes on every internal navigation, ensuring settings are always active.
+
 ## [2.1.3] - 2025-10-01
 
 ### Fixed
