@@ -1,7 +1,7 @@
 # YouTube SpeedX
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.1.4-blue)
+![Version](https://img.shields.io/badge/Version-2.1.5-blue)
 [![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
 
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
@@ -18,7 +18,7 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 - **Persistent Settings:** Remembers your speed, resolution, and feature choices.
 - **Customizable Hotkeys:** Reliably change the hotkeys for all actions using their physical location on the keyboard (`event.code`).
 - **Force H.264 Codec:** Toggle the use of the H.264 video codec to reduce CPU usage and improve battery life on supported hardware.
-- **Native UI Feedback:** Uses YouTube's built-in on-screen display for speed and resolution changes.
+- **Native UI Feedback:** Uses YouTube's built-in on-screen display for speed and resolution changes, with a pixel-perfect custom display for speeds above 2x.
 - **Multi-Platform Support:** Works on YouTube, RuTube, Smotrim, Ivi, Twitch, VK Video, Telegram Web, and Yandex.Disk.
 
 ## 🚀 Installation
@@ -41,8 +41,8 @@ From this menu, you can configure all aspects of the script, including the hotke
 
 The script uses physical key locations (`event.code`), so these hotkeys will work regardless of your keyboard layout.
 
--   `[` key: Decrease playback speed (`BracketLeft`).
--   `]` key: Increase playback speed (`BracketRight`).
+-   `Shift` + `>`: Increase playback speed (`Period`). Seamlessly transitions to custom speeds above 2x.
+-   `Shift` + `<`: Decrease playback speed (`Comma`).
 -   `,` key: Decrease video resolution (`Comma`).
 -   `.` key: Increase video resolution (`Period`).
 -   `S` key (with `Ctrl+Alt`): Open the settings menu (`KeyS`).

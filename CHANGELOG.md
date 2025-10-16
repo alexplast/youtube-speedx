@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.1.5] - 2025-10-15
+
+### Fixed
+- **UI & Hotkey Overhaul:** A complete rework of the speed control logic to perfectly integrate with the new YouTube UI.
+- **Unified Hotkeys:** Removed custom speed hotkeys (`[` and `]`) in favor of extending the native YouTube hotkeys (`Shift + <` and `Shift + >`). The script now seamlessly takes over when speed exceeds 2x.
+- **Custom Bezel Notification:** Created a pixel-perfect custom notification (bezel) that mimics the native YouTube style. It reliably displays custom speeds (> 2x) without conflicting with the native UI.
+- **Race Condition Solved:** Eliminated all visual glitches and "flashing" between native and custom notifications by using a capture-phase event listener and `stopImmediatePropagation()` to ensure our script always runs first.
+- **Seamless Speed Transitions:** Fixed all bugs related to transitioning between native (< 2x) and custom (> 2x) speeds, ensuring every step (`...1.75x, 2.0x, 2.1x...`) is correctly displayed.
+- **Player Bar Display:** The custom duration/speed display in the player bar now correctly updates for all speed changes, whether native or custom, by listening to the video's `ratechange` event.
+
 ## [2.1.4] - 2025-10-10
 
 ### Fixed
