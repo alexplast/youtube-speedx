@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.1.6] - 2025-10-16
+
+### Fixed
+- **UI:** Improved speed indicator formatting to remove unnecessary trailing zeros (e.g., `2.3x` instead of `2.30x`).
+- **UI:** Replaced hardcoded Russian strings in alerts and tooltips with English equivalents.
+
+### Changed
+- **Code Quality:** Refactored the settings UI generation logic to be more modular and easier to maintain.
+
 ## [2.1.5] - 2025-10-15
 
 ### Fixed
