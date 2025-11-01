@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.2.0] - 2025-10-18
+
+### Added
+- **Speed Boost Feature:** Temporarily increase playback speed by holding down a configurable hotkey (defaults to 'B') to quickly skip uninteresting parts.
+- **UI Integration:** Added a "YouTube SpeedX Settings" button directly into the YouTube player's settings menu (gear icon) for easier access.
+
+### Fixed
+- **UI:** Corrected a bug that prevented hotkey changes from being saved correctly in the settings menu.
+- **UI:** Resolved a race condition that could cause the settings menu button to appear at the bottom of the list instead of the top.
+- **Compatibility:** Fixed issues with YouTube's Content Security Policy (TrustedHTML) by programmatically creating SVG icons and other elements, preventing script errors.
+- **UI:** Ensured all new UI elements are in English for consistency.
+
 ## [2.1.6] - 2025-10-16
 
 ### Fixed

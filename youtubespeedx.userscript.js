@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.1.6
+// @version      2.2.0
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -36,6 +36,9 @@ const CONFIG = {
     RES_DOWN_KEY: 'Comma',
     RES_UP_KEY: 'Period',
     SETTINGS_KEY: 'KeyS',
+    enableSpeedBoost: true,
+    BOOST_KEY: 'KeyB',
+    BOOST_SPEED: 3.5,
 };
 
 const loadConfig = () => {
@@ -52,6 +55,9 @@ const loadConfig = () => {
         if (storedConfig.RES_DOWN_KEY) CONFIG.RES_DOWN_KEY = storedConfig.RES_DOWN_KEY;
         if (storedConfig.RES_UP_KEY) CONFIG.RES_UP_KEY = storedConfig.RES_UP_KEY;
         if (storedConfig.SETTINGS_KEY) CONFIG.SETTINGS_KEY = storedConfig.SETTINGS_KEY;
+        if (storedConfig.enableSpeedBoost !== undefined) CONFIG.enableSpeedBoost = storedConfig.enableSpeedBoost;
+        if (storedConfig.BOOST_KEY) CONFIG.BOOST_KEY = storedConfig.BOOST_KEY;
+        if (storedConfig.BOOST_SPEED !== undefined) CONFIG.BOOST_SPEED = storedConfig.BOOST_SPEED;
     } catch (e) { /* Fail silently */ }
 };
 
@@ -253,7 +259,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const initializePlayer = async () => {
+    let menuObserver = null;
+    const startMenuObserver = (player, openModalCallback) => {
+        if (menuObserver) menuObserver.disconnect();
+
+        const createSettingsMenuItem = () => {
+            const menuItem = document.createElement('div');
+            menuItem.className = 'ytp-menuitem';
+            menuItem.id = 'yt-speedx-menu-item';
+
+            const iconContainer = document.createElement('div');
+            iconContainer.className = 'ytp-menuitem-icon';
+            
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute('height', '24');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('width', '24');
+            svg.setAttribute('fill', 'white');
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute('d', 'M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z');
+            svg.appendChild(path);
+            iconContainer.appendChild(svg);
+
+            const label = document.createElement('div');
+            label.className = 'ytp-menuitem-label';
+            label.textContent = 'YouTube SpeedX Settings';
+
+            const content = document.createElement('div');
+            content.className = 'ytp-menuitem-content';
+
+            menuItem.append(iconContainer, label, content);
+
+            menuItem.addEventListener('click', () => {
+                const settingsButton = document.querySelector('.ytp-settings-button');
+                if (settingsButton) settingsButton.click();
+                openModalCallback();
+            });
+            return menuItem;
+        };
+
+        menuObserver = new MutationObserver(() => {
+            const panelMenu = document.querySelector('.ytp-panel-menu');
+            if (panelMenu && !panelMenu.querySelector('#yt-speedx-menu-item') && panelMenu.firstChild) {
+                const newItem = createSettingsMenuItem();
+                panelMenu.insertBefore(newItem, panelMenu.firstChild);
+            }
+        });
+
+        menuObserver.observe(player, { childList: true, subtree: true });
+    };
+
+    const initializePlayer = async (openModalCallback) => {
         if (activeAdapter.name !== 'YouTube') {
             const video = activeAdapter.getVideoElement();
             if (video) activeAdapter.applySpeed(video, CONFIG.speed);
@@ -267,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (videoElement) {
                     createCustomBezel();
                     patchPlayerForFPS(player);
+                    startMenuObserver(player, openModalCallback);
                     activeAdapter.applySpeed(videoElement, CONFIG.speed, CONFIG.speed);
                     activeAdapter.applyResolution(player);
                     
@@ -315,45 +373,48 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = document.createElement('label');
             label.htmlFor = `yt-speedx-${config.id}`;
             label.textContent = config.label;
-            
             const element = document.createElement(config.elementType);
             Object.assign(element, { id: `yt-speedx-${config.id}`, ...config.props });
-            
-            if (config.options) {
-                config.options.forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt.value;
-                    option.textContent = opt.text;
-                    element.appendChild(option);
-                });
-            }
+            if (config.options) config.options.forEach(opt => { const option = document.createElement('option'); option.value = opt.value; option.textContent = opt.text; element.appendChild(option); });
             settingsGrid.append(label, element);
         });
 
-        const hr = document.createElement('hr');
+        const hr1 = document.createElement('hr');
         const hotkeysTitle = document.createElement('h3');
         const smallText = document.createElement('small');
         smallText.textContent = '(uses physical key location)';
         hotkeysTitle.append('Hotkeys ', smallText);
         const hotkeysGrid = document.createElement('div');
         hotkeysGrid.className = 'yt-speedx-grid';
-        
         const hotkeyConfigs = [
             { id: 'res-down-key', label: 'Decrease Resolution' }, 
             { id: 'res-up-key', label: 'Increase Resolution' },
             { id: 'settings-key', label: 'Open Settings (Ctrl+Alt+)' }
         ];
-
         hotkeyConfigs.forEach(config => {
-            const lbl = document.createElement('label');
-            lbl.htmlFor = `yt-speedx-${config.id}`;
-            lbl.textContent = config.label;
-            const input = document.createElement('input');
-            Object.assign(input, { id: `yt-speedx-${config.id}`, type: 'text', className: 'yt-speedx-hotkey-input', readOnly: true });
+            const lbl = document.createElement('label'); lbl.htmlFor = `yt-speedx-${config.id}`; lbl.textContent = config.label;
+            const input = document.createElement('input'); Object.assign(input, { id: `yt-speedx-${config.id}`, type: 'text', className: 'yt-speedx-hotkey-input', readOnly: true });
             hotkeysGrid.append(lbl, input);
         });
 
-        body.append(settingsGrid, hr, hotkeysTitle, hotkeysGrid);
+        const hr2 = document.createElement('hr');
+        const boostTitle = document.createElement('h3');
+        boostTitle.textContent = 'Speed Boost';
+        const boostGrid = document.createElement('div');
+        boostGrid.className = 'yt-speedx-grid';
+        const boostConfigs = [
+            { id: 'boost-enable', label: 'Enable Speed Boost', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } },
+            { id: 'boost-speed', label: 'Boost Speed (x)', elementType: 'input', props: { type: 'number', step: '0.1', min: '0.1', max: '16' } },
+            { id: 'boost-key', label: 'Boost Hotkey', elementType: 'input', props: { type: 'text', className: 'yt-speedx-hotkey-input', readOnly: true } },
+        ];
+        boostConfigs.forEach(config => {
+            const lbl = document.createElement('label'); lbl.htmlFor = `yt-speedx-${config.id}`; lbl.textContent = config.label;
+            const input = document.createElement(config.elementType); Object.assign(input, { id: `yt-speedx-${config.id}`, ...config.props });
+            boostGrid.append(lbl, input);
+        });
+
+
+        body.append(settingsGrid, hr1, hotkeysTitle, hotkeysGrid, hr2, boostTitle, boostGrid);
         
         const footer = document.createElement('div');
         footer.className = 'yt-speedx-modal-footer';
@@ -367,21 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         GM_addStyle(`
             /* Bezel & Duration Display */
-            @keyframes ytSpeedX-text-fadeout {
-                0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; }
-            }
-            #yt-speedx-bezel-wrapper {
-                text-align: center; position: absolute; left: 0; right: 0; top: 10%; z-index: 19; pointer-events: none; opacity: 0;
-            }
-            #yt-speedx-bezel-wrapper.yt-speedx-bezel-show {
-                animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards;
-            }
-            #yt-speedx-bezel-text {
-                display: inline-block; padding: 10px 20px; font-size: 175%; border-radius: 3px;
-                -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px));
-                backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px));
-                background: var(--yt-spec-overlay-background-medium,rgba(0,0,0,.6));
-            }
+            @keyframes ytSpeedX-text-fadeout { 0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; } }
+            #yt-speedx-bezel-wrapper { text-align: center; position: absolute; left: 0; right: 0; top: 10%; z-index: 19; pointer-events: none; opacity: 0; }
+            #yt-speedx-bezel-wrapper.yt-speedx-bezel-show { animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards; }
+            #yt-speedx-bezel-text { display: inline-block; padding: 10px 20px; font-size: 175%; border-radius: 3px; -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); background: var(--yt-spec-overlay-background-medium,rgba(0,0,0,.6)); }
             
             /* Settings Modal Layout & General */
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
@@ -404,34 +454,19 @@ document.addEventListener('DOMContentLoaded', () => {
             .yt-speedx-grid label { font-size: 1em; color: #eee; }
 
             /* Form Elements */
-            #yt-speedx-modal input[type="number"],
-            #yt-speedx-modal input[type="text"],
-            #yt-speedx-modal select {
-                background: #181818; color: #fff; border: 1px solid #3e3e3e; border-radius: 4px; padding: 8px 12px; width: 100%; box-sizing: border-box; font-size: 1em;
-            }
-            #yt-speedx-modal input:focus, #yt-speedx-modal select:focus {
-                outline: none; border-color: #3ea6ff; box-shadow: 0 0 0 1px #3ea6ff;
-            }
+            #yt-speedx-modal input[type="number"], #yt-speedx-modal input[type="text"], #yt-speedx-modal select { background: #181818; color: #fff; border: 1px solid #3e3e3e; border-radius: 4px; padding: 8px 12px; width: 100%; box-sizing: border-box; font-size: 1em; }
+            #yt-speedx-modal input:focus, #yt-speedx-modal select:focus { outline: none; border-color: #3ea6ff; box-shadow: 0 0 0 1px #3ea6ff; }
             .yt-speedx-hotkey-input { text-align: center; font-weight: bold; cursor: pointer; }
 
             /* Custom Checkbox */
-            .yt-speedx-checkbox {
-                appearance: none; -webkit-appearance: none; position: relative; width: 40px; height: 20px; background: #3e3e3e;
-                border-radius: 20px; cursor: pointer; transition: background-color 0.2s; justify-self: start;
-            }
-            .yt-speedx-checkbox::before {
-                content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
-                background: #fff; border-radius: 50%; transition: left 0.2s;
-            }
+            .yt-speedx-checkbox { appearance: none; -webkit-appearance: none; position: relative; width: 40px; height: 20px; background: #3e3e3e; border-radius: 20px; cursor: pointer; transition: background-color 0.2s; justify-self: start; }
+            .yt-speedx-checkbox::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left 0.2s; }
             .yt-speedx-checkbox:checked { background: #3ea6ff; }
             .yt-speedx-checkbox:checked::before { left: 22px; }
 
             /* Modal Footer */
             .yt-speedx-modal-footer { display: flex; justify-content: flex-end; padding: 16px 24px; border-top: 1px solid #3e3e3e; background: rgba(255,255,255,0.05); border-radius: 0 0 12px 12px;}
-            #yt-speedx-save-btn {
-                background-color: #3ea6ff; color: #fff; border: none; padding: 10px 20px; border-radius: 4px;
-                cursor: pointer; font-size: 1em; font-weight: bold; transition: background-color 0.2s;
-            }
+            #yt-speedx-save-btn { background-color: #3ea6ff; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 1em; font-weight: bold; transition: background-color 0.2s; }
             #yt-speedx-save-btn:hover { background-color: #66baff; }
         `);
 
@@ -444,8 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('yt-speedx-res-down-key').value = CONFIG.RES_DOWN_KEY;
             document.getElementById('yt-speedx-res-up-key').value = CONFIG.RES_UP_KEY;
             document.getElementById('yt-speedx-settings-key').value = CONFIG.SETTINGS_KEY;
-            overlay.style.display = 'block';
-            modal.style.display = 'block';
+            document.getElementById('yt-speedx-boost-enable').checked = CONFIG.enableSpeedBoost;
+            document.getElementById('yt-speedx-boost-key').value = CONFIG.BOOST_KEY;
+            document.getElementById('yt-speedx-boost-speed').value = CONFIG.BOOST_SPEED;
+            overlay.style.display = 'block'; modal.style.display = 'block';
         };
         const closeModal = () => { overlay.style.display = 'none'; modal.style.display = 'none'; };
         const saveAndClose = () => {
@@ -458,18 +495,22 @@ document.addEventListener('DOMContentLoaded', () => {
             CONFIG.RES_DOWN_KEY = document.getElementById('yt-speedx-res-down-key').value;
             CONFIG.RES_UP_KEY = document.getElementById('yt-speedx-res-up-key').value;
             CONFIG.SETTINGS_KEY = document.getElementById('yt-speedx-settings-key').value;
+            CONFIG.enableSpeedBoost = document.getElementById('yt-speedx-boost-enable').checked;
+            CONFIG.BOOST_KEY = document.getElementById('yt-speedx-boost-key').value;
+            CONFIG.BOOST_SPEED = parseFloat(document.getElementById('yt-speedx-boost-speed').value);
             saveConfig();
             closeModal();
-            if (wasH264Enabled !== CONFIG.useH264 || wasMaxFpsQuality !== CONFIG.max60FpsQuality) {
-                alert("Codec or frame rate settings will take effect after reloading the page.");
-            }
+            if (wasH264Enabled !== CONFIG.useH264 || wasMaxFpsQuality !== CONFIG.max60FpsQuality) alert("Codec or frame rate settings will take effect after reloading the page.");
         };
         saveBtn.addEventListener('click', saveAndClose);
         closeBtn.addEventListener('click', closeModal);
         overlay.addEventListener('click', closeModal);
         document.querySelectorAll('.yt-speedx-hotkey-input').forEach(input => {
             input.addEventListener('focus', () => { input.value = 'Press a key...'; });
-            input.addEventListener('blur', () => { input.value = CONFIG[input.id.replace('yt-speedx-','').replace(/-/g,'_').toUpperCase()] || ''; });
+            input.addEventListener('blur', () => {
+                const configKey = input.id.replace('yt-speedx-', '').replace(/-/g, '_').toUpperCase();
+                if (input.value === 'Press a key...') { input.value = CONFIG[configKey] || ''; }
+            });
             input.addEventListener('keydown', e => {
                 e.preventDefault();
                 if (e.code) { input.value = e.code; input.blur(); }
@@ -479,16 +520,46 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const { openModal } = initSettingsUI();
-    initializePlayer();
+    const boundInitializePlayer = () => initializePlayer(openModal);
+    
+    boundInitializePlayer();
     if (activeAdapter.name === 'YouTube') {
-        window.addEventListener('yt-navigate-finish', initializePlayer);
+        window.addEventListener('yt-navigate-finish', boundInitializePlayer);
     }
+    
+    let originalSpeedBeforeBoost = null;
+    const cancelBoost = () => {
+        if (originalSpeedBeforeBoost === null) return;
+        const videoElement = activeAdapter.getVideoElement();
+        if (videoElement) {
+            videoElement.playbackRate = originalSpeedBeforeBoost;
+            if (activeAdapter.name === 'YouTube') {
+                activeAdapter.showBezelNotification(`${originalSpeedBeforeBoost.toFixed(1)}x`);
+            }
+        }
+        originalSpeedBeforeBoost = null;
+    };
 
     window.addEventListener('keydown', (event) => {
+        if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || document.getElementById('yt-speedx-modal')?.style.display === 'block') return;
+
+        if (CONFIG.enableSpeedBoost && event.code === CONFIG.BOOST_KEY && !event.repeat) {
+            if (originalSpeedBeforeBoost === null) {
+                const videoElement = activeAdapter.getVideoElement();
+                if (!videoElement) return;
+                originalSpeedBeforeBoost = videoElement.playbackRate;
+                videoElement.playbackRate = CONFIG.BOOST_SPEED;
+                if (activeAdapter.name === 'YouTube') {
+                    activeAdapter.showBezelNotification(`${CONFIG.BOOST_SPEED.toFixed(1)}x Boost`);
+                }
+                event.preventDefault(); event.stopImmediatePropagation();
+            }
+            return;
+        }
+
         if (event.ctrlKey && event.altKey && event.code === CONFIG.SETTINGS_KEY) {
             event.preventDefault(); event.stopImmediatePropagation(); openModal(); return;
         }
-        if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || document.getElementById('yt-speedx-modal')?.style.display === 'block') return;
 
         const videoElement = activeAdapter.getVideoElement();
         if (!videoElement) return;
@@ -496,18 +567,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.shiftKey && !event.ctrlKey && !event.altKey) {
             const currentSpeed = videoElement.playbackRate;
             let speedHandled = false;
-            if (event.code === 'Period') { // > (Increase)
-                if (currentSpeed >= 2) {
-                    activeAdapter.applySpeed(videoElement, currentSpeed + CONFIG.ADJUSTMENT_STEP, currentSpeed);
-                    speedHandled = true;
-                }
-            } else if (event.code === 'Comma') { // < (Decrease)
-                if (currentSpeed > 2) {
-                    const newSpeed = currentSpeed - CONFIG.ADJUSTMENT_STEP;
-                    activeAdapter.applySpeed(videoElement, newSpeed, currentSpeed);
-                    speedHandled = true;
-                }
-            }
+            if (event.code === 'Period') { if (currentSpeed >= 2) { activeAdapter.applySpeed(videoElement, currentSpeed + CONFIG.ADJUSTMENT_STEP, currentSpeed); speedHandled = true; }
+            } else if (event.code === 'Comma') { if (currentSpeed > 2) { const newSpeed = currentSpeed - CONFIG.ADJUSTMENT_STEP; activeAdapter.applySpeed(videoElement, newSpeed, currentSpeed); speedHandled = true; } }
             if (speedHandled) { event.preventDefault(); event.stopImmediatePropagation(); }
             return;
         }
@@ -521,5 +582,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (handled) { event.preventDefault(); event.stopImmediatePropagation(); }
         }
+    }, true);
+
+    window.addEventListener('keyup', (event) => {
+        if (CONFIG.enableSpeedBoost && event.code === CONFIG.BOOST_KEY) {
+            cancelBoost();
+        }
+    }, true);
+
+    window.addEventListener('blur', () => {
+        cancelBoost();
     }, true);
 });

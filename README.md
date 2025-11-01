@@ -1,7 +1,7 @@
 # YouTube SpeedX
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.1.6-blue)
+![Version](https://img.shields.io/badge/Version-2.2.0-blue)
 [![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
 
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
@@ -10,8 +10,9 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 
 ## ✨ Features
 
-- **Polished Settings Menu:** Easily configure the script through a professional UI activated by a hotkey (`Ctrl + Alt + S`).
+- **Polished Settings Menu:** Easily configure the script through a professional UI, accessible directly from the YouTube player's settings menu or via hotkey (`Ctrl + Alt + S`).
 - **Custom Default Speed:** Set any default playback speed you like, without floating-point errors.
+- **Speed Boost:** Temporarily accelerate video playback by holding a hotkey (defaults to `B`) to quickly skip uninteresting parts.
 - **Customizable Speed Step:** Configure the increment/decrement value for speed changes in the settings menu.
 - **Smart FPS Control:** Set a maximum resolution for 60 FPS videos (e.g., limit to 1080p60 or 720p60) or disable them completely to match your hardware's capabilities.
 - **Dropdown for Resolution:** Choose your preferred default resolution from a clean dropdown list.
@@ -33,9 +34,9 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 
 ### Settings Menu
 
-To access the settings, press **`Ctrl + Alt + S`** (by default).
+Click the settings icon (gear) in the YouTube player and select **"YouTube SpeedX Settings"**.
 
-From this menu, you can configure all aspects of the script, including the hotkeys themselves.
+Alternatively, you can press **`Ctrl + Alt + S`** (by default). From this menu, you can configure all aspects of the script, including the hotkeys themselves.
 
 ### Default Hotkeys
 
@@ -43,6 +44,7 @@ The script uses physical key locations (`event.code`), so these hotkeys will wor
 
 -   `Shift` + `>`: Increase playback speed (`Period`). Seamlessly transitions to custom speeds above 2x.
 -   `Shift` + `<`: Decrease playback speed (`Comma`).
+-   `B` key (hold): Temporarily activate Speed Boost (`KeyB`).
 -   `,` key: Decrease video resolution (`Comma`).
 -   `.` key: Increase video resolution (`Period`).
 -   `S` key (with `Ctrl+Alt`): Open the settings menu (`KeyS`).
