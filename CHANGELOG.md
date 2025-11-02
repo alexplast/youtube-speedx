@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.2.1] - 2025-11-02
+
+### Added
+- **UI:** Added a visual notification (bezel) when changing video quality using hotkeys, providing instant feedback.
+
+### Changed
+- **Hotkeys:** Improved the logic for quality change hotkeys. You can now press the keys multiple times rapidly, and the script will apply the final selected quality after a short delay, making the interaction much smoother.
+
+### Fixed
+- **UI:** Fixed a critical bug that caused the script's settings button to appear at the bottom of the player's settings menu. The button is now reliably positioned at the top using a CSS-based fix.
+- **UI:** Resolved an issue where the script's settings button would incorrectly appear in sub-menus (e.g., quality or speed selection lists).
+
 ## [2.2.0] - 2025-10-18
 
 ### Added

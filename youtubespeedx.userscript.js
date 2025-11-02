@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.2.0
+// @version      2.2.1
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -102,6 +102,12 @@ if (CONFIG.useH264) {
 // --- ALL DOM-DEPENDENT LOGIC RUNS AFTER DOM IS LOADED ---
 document.addEventListener('DOMContentLoaded', () => {
 
+    let qualityChangeState = {
+        debounceTimer: null,
+        targetQualityIndex: -1,
+        availableQualityData: []
+    };
+
     const GenericAdapter = {
         name: 'Generic',
         isMatch: () => true,
@@ -195,20 +201,51 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         changeResolution: function(direction) {
             const player = this.getPlayer();
-            if (typeof player?.getAvailableQualityLevels !== 'function') return;
-            const availableQualities = player.getAvailableQualityLevels();
-            if (!availableQualities || availableQualities.length === 0) return;
-            const currentQuality = player.getPlaybackQuality();
-            const currentIndex = availableQualities.indexOf(currentQuality);
-            let newIndex = currentIndex;
-            if (direction === 'up' && currentIndex > 0) newIndex = currentIndex - 1;
-            else if (direction === 'down' && currentIndex < availableQualities.length - 1) newIndex = currentIndex + 1;
-            if (newIndex !== currentIndex) {
-                const newQuality = availableQualities[newIndex];
-                player.setPlaybackQualityRange(newQuality);
-                CONFIG.resolution = newQuality;
-                saveConfig();
+            if (typeof player?.getAvailableQualityData !== 'function') return;
+
+            // On the first press of a sequence, sync our state with the player's actual current state.
+            if (!qualityChangeState.debounceTimer) {
+                qualityChangeState.availableQualityData = player.getAvailableQualityData(true); // Get all, bypass our filter
+                if (qualityChangeState.availableQualityData.length === 0) return;
+
+                const currentQuality = player.getPlaybackQuality();
+                qualityChangeState.targetQualityIndex = qualityChangeState.availableQualityData.findIndex(q => q.quality === currentQuality);
+                
+                if (qualityChangeState.targetQualityIndex === -1) {
+                    qualityChangeState.targetQualityIndex = 0;
+                }
             }
+
+            // Calculate the new target index based on the direction.
+            let newIndex = qualityChangeState.targetQualityIndex;
+            if (direction === 'up' && newIndex > 0) {
+                newIndex--;
+            } else if (direction === 'down' && newIndex < qualityChangeState.availableQualityData.length - 1) {
+                newIndex++;
+            }
+
+            qualityChangeState.targetQualityIndex = newIndex;
+
+            // Immediately show visual feedback for the new target quality.
+            const newQualityInfo = qualityChangeState.availableQualityData[qualityChangeState.targetQualityIndex];
+            if (newQualityInfo && newQualityInfo.qualityLabel) {
+                this.showBezelNotification(newQualityInfo.qualityLabel);
+            }
+
+            // Reset the timer. The command to the player will only be sent after the user stops pressing keys.
+            clearTimeout(qualityChangeState.debounceTimer);
+            qualityChangeState.debounceTimer = setTimeout(() => {
+                const finalQualityInfo = qualityChangeState.availableQualityData[qualityChangeState.targetQualityIndex];
+                if (finalQualityInfo) {
+                    player.setPlaybackQualityRange(finalQualityInfo.quality);
+                    CONFIG.resolution = finalQualityInfo.quality;
+                    saveConfig(); // Save config only when initiated by our hotkeys.
+                }
+                // Reset state for the next sequence of actions.
+                qualityChangeState.debounceTimer = null;
+                qualityChangeState.targetQualityIndex = -1;
+                qualityChangeState.availableQualityData = [];
+            }, 350);
         }
     };
 
@@ -301,9 +338,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         menuObserver = new MutationObserver(() => {
             const panelMenu = document.querySelector('.ytp-panel-menu');
-            if (panelMenu && !panelMenu.querySelector('#yt-speedx-menu-item') && panelMenu.firstChild) {
+            if (!panelMenu) return;
+
+            const panel = panelMenu.closest('.ytp-panel');
+            const isRootMenu = panel && !panel.querySelector('.ytp-panel-back-button');
+            const hasMenuItem = panelMenu.querySelector('#yt-speedx-menu-item');
+
+            if (isRootMenu && !hasMenuItem) {
                 const newItem = createSettingsMenuItem();
-                panelMenu.insertBefore(newItem, panelMenu.firstChild);
+                panelMenu.prepend(newItem);
             }
         });
 
@@ -433,6 +476,10 @@ document.addEventListener('DOMContentLoaded', () => {
             #yt-speedx-bezel-wrapper.yt-speedx-bezel-show { animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards; }
             #yt-speedx-bezel-text { display: inline-block; padding: 10px 20px; font-size: 175%; border-radius: 3px; -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); background: var(--yt-spec-overlay-background-medium,rgba(0,0,0,.6)); }
             
+            /* Enforce our menu item position */
+            .ytp-panel-menu { display: flex; flex-direction: column; }
+            #yt-speedx-menu-item { order: -1; }
+
             /* Settings Modal Layout & General */
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
             #yt-speedx-modal { display: none; position: fixed; z-index: 2501; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #212121; color: #fff; border: 1px solid #3e3e3e; border-radius: 12px; width: 500px; max-width: 90vw; font-family: "Roboto", "Arial", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
