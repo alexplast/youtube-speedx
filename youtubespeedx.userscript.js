@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.2.1
+// @version      2.3.0
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -602,6 +602,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 event.preventDefault(); event.stopImmediatePropagation();
             }
             return;
+        }
+
+        // Handle speed adjustments while boost is active
+        if (originalSpeedBeforeBoost !== null) {
+            const videoElement = activeAdapter.getVideoElement();
+            if (!videoElement) return;
+
+            let boostHandled = false;
+            let newBoostSpeed = CONFIG.BOOST_SPEED;
+
+            // Handle Shift + >/< for incremental adjustment
+            if (event.shiftKey && !event.ctrlKey && !event.altKey) {
+                if (event.code === 'Period') {
+                    newBoostSpeed += CONFIG.ADJUSTMENT_STEP;
+                    boostHandled = true;
+                } else if (event.code === 'Comma') {
+                    newBoostSpeed -= CONFIG.ADJUSTMENT_STEP;
+                    boostHandled = true;
+                }
+            }
+            // Handle number keys for direct speed set
+            else if (!event.shiftKey && !event.ctrlKey && !event.altKey && event.code.startsWith('Digit')) {
+                const digit = parseInt(event.code.replace('Digit', ''), 10);
+                if (digit >= 1 && digit <= 9) {
+                    newBoostSpeed = digit;
+                    boostHandled = true;
+                }
+            }
+
+            if (boostHandled) {
+                CONFIG.BOOST_SPEED = +Math.max(0.1, Math.min(newBoostSpeed, 16)).toFixed(2);
+                videoElement.playbackRate = CONFIG.BOOST_SPEED;
+                if (activeAdapter.name === 'YouTube') {
+                    activeAdapter.showBezelNotification(`${CONFIG.BOOST_SPEED.toFixed(1)}x Boost`);
+                }
+                saveConfig();
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+            return; // Exit handler so regular hotkeys are not processed while boosting
         }
 
         if (event.ctrlKey && event.altKey && event.code === CONFIG.SETTINGS_KEY) {

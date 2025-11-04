@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.3.0] - 2025-11-15
+
+### Added
+- **Speed Boost:** You can now adjust the Speed Boost rate on-the-fly while holding the boost key. Use the standard speed hotkeys (`Shift + >/<`) for fine-tuning or press a number key (`1-9`) to set the speed directly. The new value is saved automatically.
+
 ## [2.2.1] - 2025-11-02
 
 ### Added
