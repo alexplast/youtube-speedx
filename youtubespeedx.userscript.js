@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.3.0
+// @version      2.4.0
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -39,6 +39,7 @@ const CONFIG = {
     enableSpeedBoost: true,
     BOOST_KEY: 'KeyB',
     BOOST_SPEED: 3.5,
+    enableFullscreenProgress: true,
 };
 
 const loadConfig = () => {
@@ -58,6 +59,7 @@ const loadConfig = () => {
         if (storedConfig.enableSpeedBoost !== undefined) CONFIG.enableSpeedBoost = storedConfig.enableSpeedBoost;
         if (storedConfig.BOOST_KEY) CONFIG.BOOST_KEY = storedConfig.BOOST_KEY;
         if (storedConfig.BOOST_SPEED !== undefined) CONFIG.BOOST_SPEED = storedConfig.BOOST_SPEED;
+        if (storedConfig.enableFullscreenProgress !== undefined) CONFIG.enableFullscreenProgress = storedConfig.enableFullscreenProgress;
     } catch (e) { /* Fail silently */ }
 };
 
@@ -296,7 +298,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const createFullscreenProgressBar = () => {
+        if (document.getElementById('yt-speedx-progress-bar')) return;
+        const bar = document.createElement('div');
+        bar.id = 'yt-speedx-progress-bar';
+        document.body.appendChild(bar);
+    };
+
+    const updateProgressBarVisibility = () => {
+        const progressBar = document.getElementById('yt-speedx-progress-bar');
+        const player = document.getElementById('movie_player');
+        if (!progressBar || !player) return;
+
+        const isFullscreen = !!document.fullscreenElement;
+        const controlsHidden = player.classList.contains('ytp-autohide');
+
+        if (CONFIG.enableFullscreenProgress && isFullscreen && controlsHidden) {
+            progressBar.style.display = 'block';
+        } else {
+            progressBar.style.display = 'none';
+        }
+    };
+
     let menuObserver = null;
+    let progressObserver = null;
     const startMenuObserver = (player, openModalCallback) => {
         if (menuObserver) menuObserver.disconnect();
 
@@ -366,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const videoElement = activeAdapter.getVideoElement();
                 if (videoElement) {
                     createCustomBezel();
+                    createFullscreenProgressBar();
                     patchPlayerForFPS(player);
                     startMenuObserver(player, openModalCallback);
                     activeAdapter.applySpeed(videoElement, CONFIG.speed, CONFIG.speed);
@@ -375,7 +401,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         videoElement.addEventListener('ratechange', () => activeAdapter.updateSpeedIndicator());
                         videoElement.dataset.rateListenerAttached = 'true';
                     }
-                    activeAdapter.updateSpeedIndicator(); // Initial call
+                    if (!videoElement.dataset.timeUpdateListener) {
+                        videoElement.addEventListener('timeupdate', () => {
+                            const bar = document.getElementById('yt-speedx-progress-bar');
+                            if (bar && videoElement.duration) {
+                                const progress = (videoElement.currentTime / videoElement.duration) * 100;
+                                bar.style.width = `${progress}%`;
+                            }
+                        });
+                        videoElement.dataset.timeUpdateListener = 'true';
+                    }
+                    if (!document.body.dataset.ytSpeedxGlobalListeners) {
+                        document.addEventListener('fullscreenchange', updateProgressBarVisibility);
+                        document.body.dataset.ytSpeedxGlobalListeners = 'true';
+                    }
+                    if (progressObserver) progressObserver.disconnect();
+                    progressObserver = new MutationObserver(updateProgressBarVisibility);
+                    progressObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+                    
+                    activeAdapter.updateSpeedIndicator();
+                    updateProgressBarVisibility();
                     return;
                 }
             }
@@ -409,7 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
             { id: 'step', label: 'Adjustment Step', elementType: 'input', props: { type: 'number', step: '0.05', min: '0.05', max: '5' } },
             { id: 'res', label: 'Default Resolution', elementType: 'select', options: [ { value: "auto", text: "Auto" }, { value: "hd2160", text: "2160p (4K)" }, { value: "hd1440", text: "1440p" }, { value: "hd1080", text: "1080p" }, { value: "hd720", text: "720p" }, { value: "large", text: "480p" }, { value: "medium", text: "360p" }, { value: "small", text: "240p" }, { value: "tiny", text: "144p" } ] },
             { id: 'max-fps-quality', label: 'Max 60 FPS Quality', elementType: 'select', options: [ { value: 'unlimited', text: 'Unlimited' }, { value: '1080', text: 'Max 1080p' }, { value: '720', text: 'Max 720p' }, { value: '480', text: 'Max 480p' }, { value: 'disabled', text: 'Disable 60 FPS' } ] },
-            { id: 'h264', label: 'Force H.264 Codec', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } }
+            { id: 'h264', label: 'Force H.264 Codec', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } },
+            { id: 'fullscreen-progress', label: 'Fullscreen Progress Bar', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } }
         ];
 
         mainSettingConfigs.forEach(config => {
@@ -480,6 +526,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .ytp-panel-menu { display: flex; flex-direction: column; }
             #yt-speedx-menu-item { order: -1; }
 
+            /* Fullscreen Progress Bar */
+            #yt-speedx-progress-bar { display: none; position: fixed; bottom: 0; left: 0; width: 0%; height: 1px; background-color: #f00; z-index: 9999; pointer-events: none; }
+
             /* Settings Modal Layout & General */
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
             #yt-speedx-modal { display: none; position: fixed; z-index: 2501; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #212121; color: #fff; border: 1px solid #3e3e3e; border-radius: 12px; width: 500px; max-width: 90vw; font-family: "Roboto", "Arial", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
@@ -506,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .yt-speedx-hotkey-input { text-align: center; font-weight: bold; cursor: pointer; }
 
             /* Custom Checkbox */
-            .yt-speedx-checkbox { appearance: none; -webkit-appearance: none; position: relative; width: 40px; height: 20px; background: #3e3e3e; border-radius: 20px; cursor: pointer; transition: background-color 0.2s; justify-self: start; }
+            .yt-speedx-checkbox { appearance: none; -webkit-appearance: none; position: relative; width: 40px; height: 20px; background: #3e3e3e; border-radius: 20px; cursor: pointer; justify-self: start; }
             .yt-speedx-checkbox::before { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left 0.2s; }
             .yt-speedx-checkbox:checked { background: #3ea6ff; }
             .yt-speedx-checkbox:checked::before { left: 22px; }
@@ -523,6 +572,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('yt-speedx-res').value = CONFIG.resolution;
             document.getElementById('yt-speedx-h264').checked = CONFIG.useH264;
             document.getElementById('yt-speedx-max-fps-quality').value = CONFIG.max60FpsQuality;
+            document.getElementById('yt-speedx-fullscreen-progress').checked = CONFIG.enableFullscreenProgress;
             document.getElementById('yt-speedx-res-down-key').value = CONFIG.RES_DOWN_KEY;
             document.getElementById('yt-speedx-res-up-key').value = CONFIG.RES_UP_KEY;
             document.getElementById('yt-speedx-settings-key').value = CONFIG.SETTINGS_KEY;
@@ -539,6 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             CONFIG.resolution = document.getElementById('yt-speedx-res').value;
             CONFIG.useH264 = document.getElementById('yt-speedx-h264').checked;
             CONFIG.max60FpsQuality = document.getElementById('yt-speedx-max-fps-quality').value;
+            CONFIG.enableFullscreenProgress = document.getElementById('yt-speedx-fullscreen-progress').checked;
             CONFIG.RES_DOWN_KEY = document.getElementById('yt-speedx-res-down-key').value;
             CONFIG.RES_UP_KEY = document.getElementById('yt-speedx-res-up-key').value;
             CONFIG.SETTINGS_KEY = document.getElementById('yt-speedx-settings-key').value;
@@ -547,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
             CONFIG.BOOST_SPEED = parseFloat(document.getElementById('yt-speedx-boost-speed').value);
             saveConfig();
             closeModal();
+            updateProgressBarVisibility(); // Update visibility in case setting was changed
             if (wasH264Enabled !== CONFIG.useH264 || wasMaxFpsQuality !== CONFIG.max60FpsQuality) alert("Codec or frame rate settings will take effect after reloading the page.");
         };
         saveBtn.addEventListener('click', saveAndClose);
