@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.4.0
+// @version      2.4.1
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -527,7 +527,7 @@ document.addEventListener('DOMContentLoaded', () => {
             #yt-speedx-menu-item { order: -1; }
 
             /* Fullscreen Progress Bar */
-            #yt-speedx-progress-bar { display: none; position: fixed; bottom: 0; left: 0; width: 0%; height: 1px; background-color: #f00; z-index: 9999; pointer-events: none; }
+            #yt-speedx-progress-bar { display: none; position: fixed; bottom: 0; left: 0; width: 0%; height: 1px; background-color: rgba(255, 0, 0, 0.5); z-index: 9999; pointer-events: none; }
 
             /* Settings Modal Layout & General */
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
