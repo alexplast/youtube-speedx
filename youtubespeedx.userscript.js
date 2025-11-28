@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.4.1
+// @version      2.5.0
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
 // @icon         https://www.google.com/s2/favicons?domain=youtube.com
+// @match        https://rutube.ru/*
+// @icon         https://www.google.com/s2/favicons?domain=rutube.ru
 // @match        https://*.smotrim.ru/*
 // @icon         https://www.google.com/s2/favicons?domain=smotrim.ru
 // @match        https://*.ivi.ru/*
@@ -40,6 +42,7 @@ const CONFIG = {
     BOOST_KEY: 'KeyB',
     BOOST_SPEED: 3.5,
     enableFullscreenProgress: true,
+    progressBarOpacity: 0.5,
 };
 
 const loadConfig = () => {
@@ -60,6 +63,7 @@ const loadConfig = () => {
         if (storedConfig.BOOST_KEY) CONFIG.BOOST_KEY = storedConfig.BOOST_KEY;
         if (storedConfig.BOOST_SPEED !== undefined) CONFIG.BOOST_SPEED = storedConfig.BOOST_SPEED;
         if (storedConfig.enableFullscreenProgress !== undefined) CONFIG.enableFullscreenProgress = storedConfig.enableFullscreenProgress;
+        if (storedConfig.progressBarOpacity !== undefined) CONFIG.progressBarOpacity = storedConfig.progressBarOpacity;
     } catch (e) { /* Fail silently */ }
 };
 
@@ -85,13 +89,13 @@ if (CONFIG.useH264) {
             return blockedCodecs.some(blocked => codecString.includes(blocked));
         };
         if (originalIsTypeSupported) {
-            MediaSource.isTypeSupported = function(type) {
+            MediaSource.isTypeSupported = function (type) {
                 if (isCodecBlocked(type)) return false;
                 return originalIsTypeSupported.apply(this, arguments);
             };
         }
         if (originalDecodingInfo) {
-            navigator.mediaCapabilities.decodingInfo = function(info) {
+            navigator.mediaCapabilities.decodingInfo = function (info) {
                 if (isCodecBlocked(info?.video?.contentType)) {
                     return Promise.resolve({ supported: false, smooth: false, powerEfficient: false });
                 }
@@ -110,19 +114,322 @@ document.addEventListener('DOMContentLoaded', () => {
         availableQualityData: []
     };
 
+    let rutubeResState = {
+        debounceTimer: null,
+        currentSelectionText: "",
+        availableLabels: [],
+        sessionActive: false
+    };
+
+    const sleep = async timeout => new Promise(resolve => setTimeout(resolve, timeout));
+
+    // --- ADAPTERS ---
+
     const GenericAdapter = {
         name: 'Generic',
         isMatch: () => true,
         getVideoElement: () => document.querySelector('video'),
         getPlayer: () => null,
-        applySpeed: function(videoElement, newSpeed) {
+        isControlsHidden: () => false, // Fallback
+        applySpeed: function (videoElement, newSpeed) {
             if (!videoElement) return;
             CONFIG.speed = +Math.max(0.1, Math.min(newSpeed, 16)).toFixed(2);
             videoElement.playbackRate = CONFIG.speed;
             saveConfig();
         },
-        applyResolution: () => {},
-        changeResolution: () => {}
+        applyResolution: () => { },
+        changeResolution: () => { },
+        updateSpeedIndicator: () => { },
+        showBezelNotification: () => { }
+    };
+
+    const RutubeAdapter = {
+        ...GenericAdapter,
+        name: 'Rutube',
+        isMatch: () => window.location.hostname.includes('rutube.ru'),
+        getVideoElement: () => document.querySelector('video'),
+        getPlayer: () => {
+            const video = document.querySelector('video');
+            return video ? (video.closest('.video-player') || video.parentElement.parentElement) : null;
+        },
+        isControlsHidden: function () {
+            const controls = document.querySelector('[data-testid="video-ui"]');
+            if (controls) {
+                if (Array.from(controls.classList).some(c => c.toLowerCase().includes('hidden'))) {
+                    return true;
+                }
+            } else {
+                const mainWrapper = this.getPlayer();
+                if (mainWrapper && window.getComputedStyle(mainWrapper).cursor === 'none') {
+                    return true;
+                }
+            }
+            return false;
+        },
+        updateSpeedIndicator: function () {
+            const video = this.getVideoElement();
+            if (!video) return;
+
+            const timeContainer = document.querySelector('div[class*="time-block-module__time"]');
+            if (!timeContainer) return;
+
+            let indicator = document.getElementById('yt-speedx-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'yt-speedx-indicator';
+
+                indicator.style.marginLeft = '8px';
+                indicator.style.color = '#fff';
+                indicator.style.fontSize = '13px';
+                indicator.style.fontWeight = '600';
+                indicator.style.lineHeight = '18px';
+                indicator.style.flexShrink = '0';
+
+                timeContainer.appendChild(indicator);
+            }
+
+            const currentSpeed = video.playbackRate;
+            if (Math.abs(currentSpeed - 1) > 0.01) {
+                indicator.textContent = `/ ${parseFloat(currentSpeed.toFixed(2))}x`;
+                indicator.style.display = 'block';
+            } else {
+                indicator.style.display = 'none';
+            }
+        },
+        showBezelNotification: function (text) {
+            let wrapper = document.getElementById('yt-speedx-bezel-wrapper');
+            const targetParent = document.fullscreenElement || this.getPlayer();
+
+            if (!targetParent) return;
+
+            if (!wrapper) {
+                wrapper = document.createElement('div');
+                wrapper.id = 'yt-speedx-bezel-wrapper';
+                wrapper.style.position = 'absolute';
+                wrapper.style.top = '20%';
+                wrapper.style.left = '50%';
+                wrapper.style.transform = 'translateX(-50%)';
+                wrapper.style.zIndex = '2147483647';
+                wrapper.style.pointerEvents = 'none';
+
+                const textElement = document.createElement('div');
+                textElement.id = 'yt-speedx-bezel-text';
+                wrapper.appendChild(textElement);
+            }
+
+            if (wrapper.parentElement !== targetParent) {
+                const computedStyle = window.getComputedStyle(targetParent);
+                if (computedStyle.position === 'static') {
+                    targetParent.style.position = 'relative';
+                }
+                targetParent.appendChild(wrapper);
+            }
+
+            const textElement = document.getElementById('yt-speedx-bezel-text');
+            if (textElement) {
+                textElement.textContent = text;
+                wrapper.classList.remove('yt-speedx-bezel-show');
+                void wrapper.offsetHeight;
+                wrapper.classList.add('yt-speedx-bezel-show');
+            }
+        },
+        applySpeed: function (videoElement, newSpeed) {
+            CONFIG.speed = +Math.max(0.1, Math.min(newSpeed, 16)).toFixed(2);
+            saveConfig();
+            videoElement.playbackRate = CONFIG.speed;
+            this.showBezelNotification(`${parseFloat(CONFIG.speed.toFixed(2))}x`);
+            this.updateSpeedIndicator();
+        },
+        _wakeUpUI: function () {
+            const player = this.getPlayer() || document.body;
+            const events = ['mousemove', 'mouseenter', 'mouseover', 'pointermove'];
+            events.forEach(eventType => {
+                player.dispatchEvent(new MouseEvent(eventType, { bubbles: true, cancelable: true, clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 }));
+            });
+        },
+        _getGearBtn: function () {
+            return document.querySelector('button[aria-controls="raichuSettingsPanel"]');
+        },
+        _getQualityBtn: function (panel) {
+            return panel ? panel.querySelector('button[aria-label="Качество"]') : null;
+        },
+        _getQualityItemsArray: function (panel) {
+            if (!panel) return [];
+            return Array.from(panel.querySelectorAll('button[aria-label*="p"], button[aria-label*="Авто"]'))
+                .filter(btn => {
+                    const label = (btn.getAttribute('aria-label') || "").toLowerCase();
+                    return !label.includes('назад') && !label.includes('авто') && !label.includes('auto');
+                });
+        },
+        _extractLabel: function (btn) {
+            return (btn.textContent || btn.getAttribute('aria-label') || "").replace('Выбрано', '').trim();
+        },
+        _openQualityMenu: async function () {
+            this._wakeUpUI();
+            await sleep(50);
+
+            const gearBtn = this._getGearBtn();
+            if (!gearBtn) return null;
+
+            gearBtn.click();
+
+            let retries = 0;
+            let menuPanel = null;
+            while (retries < 15) {
+                await sleep(50);
+                menuPanel = document.getElementById('raichuSettingsPanel');
+                if (menuPanel) break;
+                retries++;
+            }
+            if (!menuPanel) {
+                this._wakeUpUI();
+                gearBtn.click();
+                await sleep(200);
+                menuPanel = document.getElementById('raichuSettingsPanel');
+                if (!menuPanel) return null;
+            }
+
+            const qualityBtn = this._getQualityBtn(menuPanel);
+            if (!qualityBtn) {
+                gearBtn.click();
+                return null;
+            }
+
+            qualityBtn.click();
+            await sleep(200);
+
+            return this._getQualityItemsArray(menuPanel);
+        },
+        applyResolution: async function () {
+            if (CONFIG.resolution === 'auto') return;
+            const getResNumber = (resStr) => {
+                if (!resStr) return 0;
+                const match = resStr.match(/(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            };
+            const targetVal = getResNumber(CONFIG.resolution);
+            if (targetVal === 0) return;
+
+            const items = await this._openQualityMenu();
+            if (!items || items.length === 0) return;
+
+            const getItemVal = (btn) => {
+                const text = this._extractLabel(btn);
+                const match = text.match(/(\d+)p/);
+                return match ? parseInt(match[1], 10) : 0;
+            };
+
+            const sortedItems = items.map(btn => ({ btn, val: getItemVal(btn) }))
+                .filter(i => i.val > 0)
+                .sort((a, b) => b.val - a.val);
+
+            let targetBtn = null;
+            for (let item of sortedItems) {
+                if (item.val <= targetVal) {
+                    targetBtn = item.btn;
+                    break;
+                }
+            }
+            if (!targetBtn && sortedItems.length > 0) targetBtn = sortedItems[sortedItems.length - 1].btn;
+
+            if (targetBtn) {
+                const isSelected = (targetBtn.getAttribute('aria-label') || "").includes('Выбрано');
+                if (!isSelected) {
+                    targetBtn.click();
+                    const text = this._extractLabel(targetBtn);
+                    this.showBezelNotification(text);
+                }
+            }
+
+            const gearBtn = this._getGearBtn();
+            if (gearBtn && document.getElementById('raichuSettingsPanel')) gearBtn.click();
+        },
+        changeResolution: async function (direction) {
+            if (rutubeResState.sessionActive) {
+                clearTimeout(rutubeResState.debounceTimer);
+
+                let currentIndex = rutubeResState.availableLabels.indexOf(rutubeResState.currentSelectionText);
+                if (currentIndex === -1) currentIndex = 0;
+
+                let newIndex = currentIndex;
+                if (direction === 'up') newIndex--; else newIndex++;
+
+                if (newIndex < 0) newIndex = 0;
+                if (newIndex >= rutubeResState.availableLabels.length) newIndex = rutubeResState.availableLabels.length - 1;
+
+                rutubeResState.currentSelectionText = rutubeResState.availableLabels[newIndex];
+
+                this.showBezelNotification(rutubeResState.currentSelectionText);
+                this._scheduleExecution();
+                return;
+            }
+
+            rutubeResState.sessionActive = true;
+
+            const items = await this._openQualityMenu();
+            if (!items || items.length === 0) {
+                rutubeResState.sessionActive = false;
+                return;
+            }
+
+            rutubeResState.availableLabels = items.map(btn => this._extractLabel(btn));
+
+            let currentBtnIndex = items.findIndex(btn => (btn.getAttribute('aria-label') || "").includes('Выбрано'));
+            if (currentBtnIndex === -1) currentBtnIndex = 0;
+
+            let newIndex = currentBtnIndex;
+            if (direction === 'up') newIndex--; else newIndex++;
+
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex >= rutubeResState.availableLabels.length) newIndex = rutubeResState.availableLabels.length - 1;
+
+            rutubeResState.currentSelectionText = rutubeResState.availableLabels[newIndex];
+
+            this.showBezelNotification(rutubeResState.currentSelectionText);
+            this._scheduleExecution();
+        },
+        _scheduleExecution: function () {
+            rutubeResState.debounceTimer = setTimeout(async () => {
+                this._wakeUpUI();
+                await sleep(50);
+
+                let menuPanel = document.getElementById('raichuSettingsPanel');
+
+                if (menuPanel) {
+                    const items = this._getQualityItemsArray(menuPanel);
+                    const targetBtn = items.find(btn => this._extractLabel(btn) === rutubeResState.currentSelectionText);
+
+                    if (targetBtn) {
+                        targetBtn.click();
+                        await sleep(100);
+                    }
+                }
+
+                const gearBtn = this._getGearBtn();
+                if (gearBtn && document.getElementById('raichuSettingsPanel')) gearBtn.click();
+
+                rutubeResState.sessionActive = false;
+                rutubeResState.availableLabels = [];
+            }, 600);
+        },
+        onInit: function () {
+            let lastSrc = '';
+            setInterval(() => {
+                const video = this.getVideoElement();
+                if (video) {
+                    if (video.src !== lastSrc) {
+                        lastSrc = video.src;
+                        video.playbackRate = CONFIG.speed;
+                        this.updateSpeedIndicator();
+                        video.addEventListener('ratechange', () => this.updateSpeedIndicator());
+                        setTimeout(() => this.applyResolution(), 2500);
+                    }
+                    if (!document.getElementById('yt-speedx-indicator')) {
+                        this.updateSpeedIndicator();
+                    }
+                }
+            }, 1000);
+        }
     };
 
     const YouTubeAdapter = {
@@ -130,13 +437,17 @@ document.addEventListener('DOMContentLoaded', () => {
         name: 'YouTube',
         isMatch: () => window.location.hostname.includes('youtube.com'),
         getPlayer: () => document.getElementById("movie_player"),
-        showBezelNotification: function(text) {
+        isControlsHidden: function () {
+            const player = this.getPlayer();
+            return player ? player.classList.contains('ytp-autohide') : false;
+        },
+        showBezelNotification: function (text) {
             const wrapper = document.getElementById('yt-speedx-bezel-wrapper');
             const textElement = document.getElementById('yt-speedx-bezel-text');
             if (!wrapper || !textElement) return;
 
             textElement.textContent = text;
-            
+
             wrapper.classList.remove('yt-speedx-bezel-show');
             void wrapper.offsetHeight;
             wrapper.classList.add('yt-speedx-bezel-show');
@@ -147,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const pad = (num) => String(num).padStart(2, '0');
             return `${hours > 0 ? `${hours}:` : ''}${pad(minutes)}:${pad(secs)}`;
         },
-        updateSpeedIndicator: function() {
+        updateSpeedIndicator: function () {
             const player = this.getPlayer();
             const videoElement = this.getVideoElement();
             const timeContainer = document.querySelector(".ytp-time-display .ytp-time-contents");
@@ -173,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 indicator.style.display = 'none';
             }
         },
-        applySpeed: function(videoElement, newSpeed, currentSpeed) {
+        applySpeed: function (videoElement, newSpeed, currentSpeed) {
             const player = this.getPlayer();
             if (!player || !videoElement) return;
 
@@ -191,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         },
-        applyResolution: function(player) {
+        applyResolution: function (player) {
             if (!player || typeof player.getAvailableQualityLevels !== 'function') return;
             const availableLevels = player.getAvailableQualityLevels();
             const desiredLevel = CONFIG.resolution;
@@ -201,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.setPlaybackQualityRange(availableLevels[0]);
             }
         },
-        changeResolution: function(direction) {
+        changeResolution: function (direction) {
             const player = this.getPlayer();
             if (typeof player?.getAvailableQualityData !== 'function') return;
 
@@ -212,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const currentQuality = player.getPlaybackQuality();
                 qualityChangeState.targetQualityIndex = qualityChangeState.availableQualityData.findIndex(q => q.quality === currentQuality);
-                
+
                 if (qualityChangeState.targetQualityIndex === -1) {
                     qualityChangeState.targetQualityIndex = 0;
                 }
@@ -251,15 +562,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const platformAdapters = [YouTubeAdapter, GenericAdapter];
+    const platformAdapters = [YouTubeAdapter, RutubeAdapter, GenericAdapter];
     const activeAdapter = platformAdapters.find(adapter => adapter.isMatch());
-
-    const sleep = async timeout => new Promise(resolve => setTimeout(resolve, timeout));
 
     const patchPlayerForFPS = (player) => {
         if (!player || player.isPatchedForFPS) return;
         const originalGetAvailableQualityData = player.getAvailableQualityData;
-        player.getAvailableQualityData = function(bypassFilter = false) {
+        player.getAvailableQualityData = function (bypassFilter = false) {
             const allFormats = originalGetAvailableQualityData.apply(player, arguments);
             if (bypassFilter || CONFIG.max60FpsQuality === 'unlimited') return allFormats;
             const qualityHeightMap = { '1080': 1080, '720': 720, '480': 480, 'disabled': 0 };
@@ -277,13 +586,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return true;
             });
         };
-        player.getAvailableQualityLevels = function() {
+        player.getAvailableQualityLevels = function () {
             return player.getAvailableQualityData().map(format => format.quality);
         }
         player.isPatchedForFPS = true;
     };
-    
+
     const createCustomBezel = () => {
+        if (activeAdapter.name === 'Rutube') return; // Rutube handles bezel dynamically
         if (document.getElementById('yt-speedx-bezel-wrapper')) return;
         const player = document.getElementById('movie_player');
         if (player) {
@@ -292,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const textElement = document.createElement('div');
             textElement.id = 'yt-speedx-bezel-text';
-            
+
             wrapper.appendChild(textElement);
             player.appendChild(wrapper);
         }
@@ -306,15 +616,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateProgressBarVisibility = () => {
-        const progressBar = document.getElementById('yt-speedx-progress-bar');
-        const player = document.getElementById('movie_player');
+        let progressBar = document.getElementById('yt-speedx-progress-bar');
+        if (!progressBar) { createFullscreenProgressBar(); progressBar = document.getElementById('yt-speedx-progress-bar'); }
+
+        const player = activeAdapter.getPlayer();
         if (!progressBar || !player) return;
 
         const isFullscreen = !!document.fullscreenElement;
-        const controlsHidden = player.classList.contains('ytp-autohide');
+        const targetParent = isFullscreen ? document.fullscreenElement : document.body;
+
+        if (progressBar.parentElement !== targetParent) {
+            targetParent.appendChild(progressBar);
+        }
+
+        const controlsHidden = activeAdapter.isControlsHidden();
 
         if (CONFIG.enableFullscreenProgress && isFullscreen && controlsHidden) {
             progressBar.style.display = 'block';
+            progressBar.style.opacity = CONFIG.progressBarOpacity;
         } else {
             progressBar.style.display = 'none';
         }
@@ -324,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let progressObserver = null;
     const startMenuObserver = (player, openModalCallback) => {
         if (menuObserver) menuObserver.disconnect();
+        if (activeAdapter.name !== 'YouTube') return; // Only YouTube has this menu structure currently
 
         const createSettingsMenuItem = () => {
             const menuItem = document.createElement('div');
@@ -332,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const iconContainer = document.createElement('div');
             iconContainer.className = 'ytp-menuitem-icon';
-            
+
             const svgNS = "http://www.w3.org/2000/svg";
             const svg = document.createElementNS(svgNS, "svg");
             svg.setAttribute('height', '24');
@@ -379,24 +699,46 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const initializePlayer = async (openModalCallback) => {
+        // Platform specific init hooks
+        if (activeAdapter.onInit) activeAdapter.onInit();
+
         if (activeAdapter.name !== 'YouTube') {
+            // For Rutube/Generic, try to apply immediately if video exists
             const video = activeAdapter.getVideoElement();
-            if (video) activeAdapter.applySpeed(video, CONFIG.speed);
-            return;
+            if (video) {
+                activeAdapter.applySpeed(video, CONFIG.speed);
+                if (activeAdapter.name === 'Rutube') {
+                    activeAdapter.updateSpeedIndicator();
+                    // Try resolution early, but UI might not be ready
+                    setTimeout(() => activeAdapter.applyResolution(), 2000);
+                }
+            }
+            // Continue to loop for robustness in SPA
         }
+
         let player, attempts = 0;
         while (attempts < 20) {
             player = activeAdapter.getPlayer();
-            if (player && typeof player.getPlaybackRate === 'function' && typeof player.getAvailableQualityData === 'function') {
+            // Looser check for non-YouTube
+            const isReady = activeAdapter.name === 'YouTube'
+                ? (player && typeof player.getPlaybackRate === 'function' && typeof player.getAvailableQualityData === 'function')
+                : (player || activeAdapter.getVideoElement());
+
+            if (isReady) {
                 const videoElement = activeAdapter.getVideoElement();
                 if (videoElement) {
                     createCustomBezel();
                     createFullscreenProgressBar();
-                    patchPlayerForFPS(player);
-                    startMenuObserver(player, openModalCallback);
+
+                    if (activeAdapter.name === 'YouTube') {
+                        patchPlayerForFPS(player);
+                        startMenuObserver(player, openModalCallback);
+                        activeAdapter.applyResolution(player);
+                    }
+
+                    // Apply speed and listener
                     activeAdapter.applySpeed(videoElement, CONFIG.speed, CONFIG.speed);
-                    activeAdapter.applyResolution(player);
-                    
+
                     if (!videoElement.dataset.rateListenerAttached) {
                         videoElement.addEventListener('ratechange', () => activeAdapter.updateSpeedIndicator());
                         videoElement.dataset.rateListenerAttached = 'true';
@@ -408,6 +750,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const progress = (videoElement.currentTime / videoElement.duration) * 100;
                                 bar.style.width = `${progress}%`;
                             }
+                            if (activeAdapter.name === 'Rutube') {
+                                updateProgressBarVisibility();
+                            }
                         });
                         videoElement.dataset.timeUpdateListener = 'true';
                     }
@@ -416,9 +761,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.body.dataset.ytSpeedxGlobalListeners = 'true';
                     }
                     if (progressObserver) progressObserver.disconnect();
-                    progressObserver = new MutationObserver(updateProgressBarVisibility);
-                    progressObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
-                    
+                    if (activeAdapter.name === 'YouTube') {
+                        progressObserver = new MutationObserver(updateProgressBarVisibility);
+                        progressObserver.observe(player, { attributes: true, attributeFilter: ['class'] });
+                    }
+
                     activeAdapter.updateSpeedIndicator();
                     updateProgressBarVisibility();
                     return;
@@ -434,16 +781,16 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.id = 'yt-speedx-overlay';
         const modal = document.createElement('div');
         modal.id = 'yt-speedx-modal';
-        
+
         const header = document.createElement('div');
         header.className = 'yt-speedx-modal-header';
         const title = document.createElement('h2');
-        title.textContent = 'YouTube SpeedX Settings';
+        title.textContent = `${activeAdapter.name} SpeedX Settings`;
         const closeBtn = document.createElement('button');
         closeBtn.id = 'yt-speedx-close-btn';
         closeBtn.textContent = '\u00d7';
         header.append(title, closeBtn);
-        
+
         const body = document.createElement('div');
         body.className = 'yt-speedx-modal-body';
         const settingsGrid = document.createElement('div');
@@ -452,10 +799,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const mainSettingConfigs = [
             { id: 'speed', label: 'Default Speed', elementType: 'input', props: { type: 'number', step: '0.1', min: '0.1', max: '16' } },
             { id: 'step', label: 'Adjustment Step', elementType: 'input', props: { type: 'number', step: '0.05', min: '0.05', max: '5' } },
-            { id: 'res', label: 'Default Resolution', elementType: 'select', options: [ { value: "auto", text: "Auto" }, { value: "hd2160", text: "2160p (4K)" }, { value: "hd1440", text: "1440p" }, { value: "hd1080", text: "1080p" }, { value: "hd720", text: "720p" }, { value: "large", text: "480p" }, { value: "medium", text: "360p" }, { value: "small", text: "240p" }, { value: "tiny", text: "144p" } ] },
-            { id: 'max-fps-quality', label: 'Max 60 FPS Quality', elementType: 'select', options: [ { value: 'unlimited', text: 'Unlimited' }, { value: '1080', text: 'Max 1080p' }, { value: '720', text: 'Max 720p' }, { value: '480', text: 'Max 480p' }, { value: 'disabled', text: 'Disable 60 FPS' } ] },
+            { id: 'res', label: 'Default Resolution', elementType: 'select', options: [{ value: "auto", text: "Auto" }, { value: "hd2160", text: "2160p (4K)" }, { value: "hd1440", text: "1440p" }, { value: "hd1080", text: "1080p" }, { value: "hd720", text: "720p" }, { value: "large", text: "480p" }, { value: "medium", text: "360p" }, { value: "small", text: "240p" }, { value: "tiny", text: "144p" }] },
+            { id: 'max-fps-quality', label: 'Max 60 FPS Quality', elementType: 'select', options: [{ value: 'unlimited', text: 'Unlimited' }, { value: '1080', text: 'Max 1080p' }, { value: '720', text: 'Max 720p' }, { value: '480', text: 'Max 480p' }, { value: 'disabled', text: 'Disable 60 FPS' }] },
             { id: 'h264', label: 'Force H.264 Codec', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } },
-            { id: 'fullscreen-progress', label: 'Fullscreen Progress Bar', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } }
+            { id: 'fullscreen-progress', label: 'Fullscreen Progress Bar', elementType: 'input', props: { type: 'checkbox', className: 'yt-speedx-checkbox' } },
+            { id: 'progress-opacity', label: 'Progress Bar Opacity', elementType: 'input', props: { type: 'number', step: '0.1', min: '0.1', max: '1' } }
         ];
 
         mainSettingConfigs.forEach(config => {
@@ -476,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const hotkeysGrid = document.createElement('div');
         hotkeysGrid.className = 'yt-speedx-grid';
         const hotkeyConfigs = [
-            { id: 'res-down-key', label: 'Decrease Resolution' }, 
+            { id: 'res-down-key', label: 'Decrease Resolution' },
             { id: 'res-up-key', label: 'Increase Resolution' },
             { id: 'settings-key', label: 'Open Settings (Ctrl+Alt+)' }
         ];
@@ -504,34 +852,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         body.append(settingsGrid, hr1, hotkeysTitle, hotkeysGrid, hr2, boostTitle, boostGrid);
-        
+
         const footer = document.createElement('div');
         footer.className = 'yt-speedx-modal-footer';
         const saveBtn = document.createElement('button');
         saveBtn.id = 'yt-speedx-save-btn';
         saveBtn.textContent = 'Save and Close';
         footer.appendChild(saveBtn);
-        
+
         modal.append(header, body, footer);
         document.body.append(overlay, modal);
 
         GM_addStyle(`
             /* Bezel & Duration Display */
             @keyframes ytSpeedX-text-fadeout { 0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; } }
-            #yt-speedx-bezel-wrapper { text-align: center; position: absolute; left: 0; right: 0; top: 10%; z-index: 19; pointer-events: none; opacity: 0; }
+            #yt-speedx-bezel-wrapper { text-align: center; position: absolute; left: 0; right: 0; top: 15%; z-index: 2500; pointer-events: none; opacity: 0; }
             #yt-speedx-bezel-wrapper.yt-speedx-bezel-show { animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards; }
-            #yt-speedx-bezel-text { display: inline-block; padding: 10px 20px; font-size: 175%; border-radius: 3px; -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); background: var(--yt-spec-overlay-background-medium,rgba(0,0,0,.6)); }
+            #yt-speedx-bezel-text { display: inline-block; padding: 10px 20px; font-size: 175%; border-radius: 3px; -webkit-backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); backdrop-filter: var(--yt-frosted-glass-backdrop-filter-override,blur(16px)); background: var(--yt-spec-overlay-background-medium,rgba(0,0,0,.6)); text-shadow: 0 0 2px rgba(0,0,0,0.5); }
             
             /* Enforce our menu item position */
             .ytp-panel-menu { display: flex; flex-direction: column; }
             #yt-speedx-menu-item { order: -1; }
 
             /* Fullscreen Progress Bar */
-            #yt-speedx-progress-bar { display: none; position: fixed; bottom: 0; left: 0; width: 0%; height: 1px; background-color: rgba(255, 0, 0, 0.5); z-index: 9999; pointer-events: none; }
+            #yt-speedx-progress-bar { display: none; position: fixed !important; bottom: 0 !important; left: 0 !important; width: 0%; height: 1px !important; background-color: #f00 !important; z-index: 2147483647 !important; pointer-events: none; transition: width 0.1s linear, opacity 0.2s ease; }
 
             /* Settings Modal Layout & General */
             #yt-speedx-overlay { display: none; position: fixed; z-index: 2500; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
-            #yt-speedx-modal { display: none; position: fixed; z-index: 2501; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #212121; color: #fff; border: 1px solid #3e3e3e; border-radius: 12px; width: 500px; max-width: 90vw; font-family: "Roboto", "Arial", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+            #yt-speedx-modal { display: none; flex-direction: column; max-height: 85vh; position: fixed; z-index: 2501; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #212121; color: #fff; border: 1px solid #3e3e3e; border-radius: 12px; width: 500px; max-width: 90vw; font-family: "Roboto", "Arial", sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
             
             /* Modal Header */
             .yt-speedx-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #3e3e3e; }
@@ -540,14 +888,16 @@ document.addEventListener('DOMContentLoaded', () => {
             #yt-speedx-close-btn:hover { color: #fff; }
 
             /* Modal Body & Content */
-            .yt-speedx-modal-body { padding: 24px; }
-            .yt-speedx-modal-body hr { border: 0; border-top: 1px solid #3e3e3e; margin: 24px 0; }
-            .yt-speedx-modal-body h3 { margin-top: 0; margin-bottom: 16px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+            .yt-speedx-modal-body { padding: 16px 24px; overflow-y: auto; flex: 1; }
+            .yt-speedx-modal-body::-webkit-scrollbar { width: 8px; }
+            .yt-speedx-modal-body::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+            .yt-speedx-modal-body hr { border: 0; border-top: 1px solid #3e3e3e; margin: 20px 0; }
+            .yt-speedx-modal-body h3 { margin-top: 0; margin-bottom: 12px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
             .yt-speedx-modal-body h3 small { font-size: 0.8em; color: #aaa; font-weight: 400; }
 
             /* Grid Layout */
-            .yt-speedx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; align-items: center; }
-            .yt-speedx-grid label { font-size: 1em; color: #eee; }
+            .yt-speedx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 20px; align-items: center; }
+            .yt-speedx-grid label { font-size: 0.95em; color: #eee; }
 
             /* Form Elements */
             #yt-speedx-modal input[type="number"], #yt-speedx-modal input[type="text"], #yt-speedx-modal select { background: #181818; color: #fff; border: 1px solid #3e3e3e; border-radius: 4px; padding: 8px 12px; width: 100%; box-sizing: border-box; font-size: 1em; }
@@ -573,13 +923,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('yt-speedx-h264').checked = CONFIG.useH264;
             document.getElementById('yt-speedx-max-fps-quality').value = CONFIG.max60FpsQuality;
             document.getElementById('yt-speedx-fullscreen-progress').checked = CONFIG.enableFullscreenProgress;
+            document.getElementById('yt-speedx-progress-opacity').value = CONFIG.progressBarOpacity;
             document.getElementById('yt-speedx-res-down-key').value = CONFIG.RES_DOWN_KEY;
             document.getElementById('yt-speedx-res-up-key').value = CONFIG.RES_UP_KEY;
             document.getElementById('yt-speedx-settings-key').value = CONFIG.SETTINGS_KEY;
             document.getElementById('yt-speedx-boost-enable').checked = CONFIG.enableSpeedBoost;
             document.getElementById('yt-speedx-boost-key').value = CONFIG.BOOST_KEY;
             document.getElementById('yt-speedx-boost-speed').value = CONFIG.BOOST_SPEED;
-            overlay.style.display = 'block'; modal.style.display = 'block';
+            overlay.style.display = 'block'; modal.style.display = 'flex'; // Changed to flex for stickiness
         };
         const closeModal = () => { overlay.style.display = 'none'; modal.style.display = 'none'; };
         const saveAndClose = () => {
@@ -590,6 +941,7 @@ document.addEventListener('DOMContentLoaded', () => {
             CONFIG.useH264 = document.getElementById('yt-speedx-h264').checked;
             CONFIG.max60FpsQuality = document.getElementById('yt-speedx-max-fps-quality').value;
             CONFIG.enableFullscreenProgress = document.getElementById('yt-speedx-fullscreen-progress').checked;
+            CONFIG.progressBarOpacity = parseFloat(document.getElementById('yt-speedx-progress-opacity').value);
             CONFIG.RES_DOWN_KEY = document.getElementById('yt-speedx-res-down-key').value;
             CONFIG.RES_UP_KEY = document.getElementById('yt-speedx-res-up-key').value;
             CONFIG.SETTINGS_KEY = document.getElementById('yt-speedx-settings-key').value;
@@ -620,27 +972,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const { openModal } = initSettingsUI();
     const boundInitializePlayer = () => initializePlayer(openModal);
-    
+
     boundInitializePlayer();
     if (activeAdapter.name === 'YouTube') {
         window.addEventListener('yt-navigate-finish', boundInitializePlayer);
     }
-    
+
     let originalSpeedBeforeBoost = null;
     const cancelBoost = () => {
         if (originalSpeedBeforeBoost === null) return;
         const videoElement = activeAdapter.getVideoElement();
         if (videoElement) {
             videoElement.playbackRate = originalSpeedBeforeBoost;
-            if (activeAdapter.name === 'YouTube') {
-                activeAdapter.showBezelNotification(`${originalSpeedBeforeBoost.toFixed(1)}x`);
-            }
+            // Show notification on both YouTube and Rutube
+            activeAdapter.showBezelNotification(`${parseFloat(originalSpeedBeforeBoost.toFixed(2))}x`);
         }
         originalSpeedBeforeBoost = null;
     };
 
     window.addEventListener('keydown', (event) => {
-        if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || document.getElementById('yt-speedx-modal')?.style.display === 'block') return;
+        if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || document.getElementById('yt-speedx-modal')?.style.display === 'flex') return;
 
         if (CONFIG.enableSpeedBoost && event.code === CONFIG.BOOST_KEY && !event.repeat) {
             if (originalSpeedBeforeBoost === null) {
@@ -648,9 +999,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!videoElement) return;
                 originalSpeedBeforeBoost = videoElement.playbackRate;
                 videoElement.playbackRate = CONFIG.BOOST_SPEED;
-                if (activeAdapter.name === 'YouTube') {
-                    activeAdapter.showBezelNotification(`${CONFIG.BOOST_SPEED.toFixed(1)}x Boost`);
-                }
+                // Show notification on both YouTube and Rutube
+                activeAdapter.showBezelNotification(`${parseFloat(CONFIG.BOOST_SPEED.toFixed(2))}x Boost`);
                 event.preventDefault(); event.stopImmediatePropagation();
             }
             return;
@@ -686,9 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (boostHandled) {
                 CONFIG.BOOST_SPEED = +Math.max(0.1, Math.min(newBoostSpeed, 16)).toFixed(2);
                 videoElement.playbackRate = CONFIG.BOOST_SPEED;
-                if (activeAdapter.name === 'YouTube') {
-                    activeAdapter.showBezelNotification(`${CONFIG.BOOST_SPEED.toFixed(1)}x Boost`);
-                }
+                activeAdapter.showBezelNotification(`${parseFloat(CONFIG.BOOST_SPEED.toFixed(2))}x Boost`);
                 saveConfig();
                 event.preventDefault();
                 event.stopImmediatePropagation();
@@ -706,8 +1054,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.shiftKey && !event.ctrlKey && !event.altKey) {
             const currentSpeed = videoElement.playbackRate;
             let speedHandled = false;
-            if (event.code === 'Period') { if (currentSpeed >= 2) { activeAdapter.applySpeed(videoElement, currentSpeed + CONFIG.ADJUSTMENT_STEP, currentSpeed); speedHandled = true; }
-            } else if (event.code === 'Comma') { if (currentSpeed > 2) { const newSpeed = currentSpeed - CONFIG.ADJUSTMENT_STEP; activeAdapter.applySpeed(videoElement, newSpeed, currentSpeed); speedHandled = true; } }
+            if (event.code === 'Period') {
+                // Always handle speed up if using adapter logic, or if > 2x for native consistency
+                activeAdapter.applySpeed(videoElement, currentSpeed + CONFIG.ADJUSTMENT_STEP, currentSpeed);
+                speedHandled = true;
+            } else if (event.code === 'Comma') {
+                const newSpeed = currentSpeed - CONFIG.ADJUSTMENT_STEP;
+                activeAdapter.applySpeed(videoElement, newSpeed, currentSpeed);
+                speedHandled = true;
+            }
             if (speedHandled) { event.preventDefault(); event.stopImmediatePropagation(); }
             return;
         }
@@ -719,6 +1074,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case CONFIG.RES_UP_KEY: activeAdapter.changeResolution('up'); break;
                 default: handled = false;
             }
+            // Block native keys if action handled
             if (handled) { event.preventDefault(); event.stopImmediatePropagation(); }
         }
     }, true);
