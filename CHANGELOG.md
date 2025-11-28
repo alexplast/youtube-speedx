@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.5.0] - 2025-11-28
+
+### Added
+- **Rutube Support:** Full support for `rutube.ru`. Includes:
+    - Speed control with native-like UI integration (speed indicator in the control bar).
+    - **Auto-Quality:** Automatically sets video quality based on your preference by interacting with the player menu.
+    - **Hotkeys:** Support for resolution switching hotkeys with visual feedback.
+    - **Smart UI:** Detects when player controls are hidden to toggle the fullscreen progress bar.
+- **Progress Bar Opacity:** Added a new setting to adjust the transparency of the fullscreen progress bar (default `0.5`).
+
+### Changed
+- **Settings UI Overhaul:** The settings menu is now responsive. The header and "Save" button are sticky, while the content area scrolls, ensuring the save button is always accessible on small screens.
+- **Fullscreen Progress Bar:** Logic improved to attach the bar to the fullscreen root element, ensuring it remains visible even if the video player's internal layers are hidden.
+- **Dynamic Title:** The settings menu title now reflects the current platform (e.g., "Rutube SpeedX Settings").
+
+### Fixed
+- **Quality Switching Lag:** Implemented a debounce mechanism for resolution hotkeys to prevent UI stuttering and missed clicks during rapid presses.
+- **Bezel Visibility:** Fixed z-index and positioning issues that caused the notification bezel to be hidden behind the video in fullscreen mode on some platforms.
+
 ## [2.4.1] - 2025-11-09
 
 ### Changed
