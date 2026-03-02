@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [2.5.1] - 2026-03-02
+
+### Changed
+- **Smart FPS Control:** Resolution hotkeys now respect the 60 FPS quality filter.
+- **Speed Normalization:** Speed and Boost values are now normalized to 2 decimal places for consistent stepping.
+
+### Fixed
+- **YouTube 0.05 Step:** Fixed rounding that caused incorrect speed jumps with `0.05` steps.
+- **Rutube Listener Leak:** Prevented duplicate `ratechange` listeners when switching videos.
+- **Settings Validation:** Added finite-number validation and clamping for speed/step/boost speed/progress opacity.
+
 ## [2.5.0] - 2025-11-28
 
 ### Added

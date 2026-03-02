@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      2.5.0
+// @version      2.5.1
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
@@ -29,7 +29,7 @@
 // ==/UserScript==
 
 // --- CONFIGURATION ---
-const CONFIG = {
+const DEFAULT_CONFIG = {
     speed: 2.3,
     resolution: "hd1080",
     useH264: true,
@@ -43,6 +43,55 @@ const CONFIG = {
     BOOST_SPEED: 3.5,
     enableFullscreenProgress: true,
     progressBarOpacity: 0.5,
+};
+
+const CONFIG = { ...DEFAULT_CONFIG };
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const normalizeSpeed = (value, fallback = null) => {
+    const numericValue = parseFloat(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return +clamp(numericValue, 0.1, 16).toFixed(2);
+};
+
+const normalizeStep = (value, fallback = null) => {
+    const numericValue = parseFloat(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return +clamp(numericValue, 0.05, 5).toFixed(2);
+};
+
+const normalizeOpacity = (value, fallback = null) => {
+    const numericValue = parseFloat(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return +clamp(numericValue, 0.1, 1).toFixed(2);
+};
+
+const formatSpeed = (value) => {
+    const numericValue = parseFloat(value);
+    if (!Number.isFinite(numericValue)) return '';
+    return String(parseFloat(numericValue.toFixed(2)));
+};
+
+const ALLOWED_MAX60_FPS_QUALITY = new Set(['unlimited', '1080', '720', '480', 'disabled']);
+
+const sanitizeConfig = () => {
+    CONFIG.speed = normalizeSpeed(CONFIG.speed, DEFAULT_CONFIG.speed);
+    CONFIG.ADJUSTMENT_STEP = normalizeStep(CONFIG.ADJUSTMENT_STEP, DEFAULT_CONFIG.ADJUSTMENT_STEP);
+    CONFIG.BOOST_SPEED = normalizeSpeed(CONFIG.BOOST_SPEED, DEFAULT_CONFIG.BOOST_SPEED);
+    CONFIG.progressBarOpacity = normalizeOpacity(CONFIG.progressBarOpacity, DEFAULT_CONFIG.progressBarOpacity);
+
+    if (!ALLOWED_MAX60_FPS_QUALITY.has(CONFIG.max60FpsQuality)) CONFIG.max60FpsQuality = DEFAULT_CONFIG.max60FpsQuality;
+
+    if (typeof CONFIG.useH264 !== 'boolean') CONFIG.useH264 = DEFAULT_CONFIG.useH264;
+    if (typeof CONFIG.enableSpeedBoost !== 'boolean') CONFIG.enableSpeedBoost = DEFAULT_CONFIG.enableSpeedBoost;
+    if (typeof CONFIG.enableFullscreenProgress !== 'boolean') CONFIG.enableFullscreenProgress = DEFAULT_CONFIG.enableFullscreenProgress;
+
+    if (typeof CONFIG.resolution !== 'string') CONFIG.resolution = DEFAULT_CONFIG.resolution;
+    if (typeof CONFIG.RES_DOWN_KEY !== 'string' || !CONFIG.RES_DOWN_KEY) CONFIG.RES_DOWN_KEY = DEFAULT_CONFIG.RES_DOWN_KEY;
+    if (typeof CONFIG.RES_UP_KEY !== 'string' || !CONFIG.RES_UP_KEY) CONFIG.RES_UP_KEY = DEFAULT_CONFIG.RES_UP_KEY;
+    if (typeof CONFIG.SETTINGS_KEY !== 'string' || !CONFIG.SETTINGS_KEY) CONFIG.SETTINGS_KEY = DEFAULT_CONFIG.SETTINGS_KEY;
+    if (typeof CONFIG.BOOST_KEY !== 'string' || !CONFIG.BOOST_KEY) CONFIG.BOOST_KEY = DEFAULT_CONFIG.BOOST_KEY;
 };
 
 const loadConfig = () => {
@@ -64,15 +113,14 @@ const loadConfig = () => {
         if (storedConfig.BOOST_SPEED !== undefined) CONFIG.BOOST_SPEED = storedConfig.BOOST_SPEED;
         if (storedConfig.enableFullscreenProgress !== undefined) CONFIG.enableFullscreenProgress = storedConfig.enableFullscreenProgress;
         if (storedConfig.progressBarOpacity !== undefined) CONFIG.progressBarOpacity = storedConfig.progressBarOpacity;
+        sanitizeConfig();
     } catch (e) { /* Fail silently */ }
 };
 
 const saveConfig = () => {
     try {
-        const configToSave = { ...CONFIG };
-        delete configToSave.DECREASE_KEY;
-        delete configToSave.INCREASE_KEY;
-        localStorage.setItem('ytSpeedXConfig', JSON.stringify(configToSave));
+        sanitizeConfig();
+        localStorage.setItem('ytSpeedXConfig', JSON.stringify({ ...CONFIG }));
     } catch (e) { /* Fail silently */ }
 };
 
@@ -133,7 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
         isControlsHidden: () => false, // Fallback
         applySpeed: function (videoElement, newSpeed) {
             if (!videoElement) return;
-            CONFIG.speed = +Math.max(0.1, Math.min(newSpeed, 16)).toFixed(2);
+            const normalizedSpeed = normalizeSpeed(newSpeed);
+            if (normalizedSpeed === null) return;
+            CONFIG.speed = normalizedSpeed;
             videoElement.playbackRate = CONFIG.speed;
             saveConfig();
         },
@@ -190,7 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const currentSpeed = video.playbackRate;
             if (Math.abs(currentSpeed - 1) > 0.01) {
-                indicator.textContent = `/ ${parseFloat(currentSpeed.toFixed(2))}x`;
+                indicator.textContent = `/ ${formatSpeed(currentSpeed)}x`;
                 indicator.style.display = 'block';
             } else {
                 indicator.style.display = 'none';
@@ -234,10 +284,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         applySpeed: function (videoElement, newSpeed) {
-            CONFIG.speed = +Math.max(0.1, Math.min(newSpeed, 16)).toFixed(2);
+            if (!videoElement) return;
+            const normalizedSpeed = normalizeSpeed(newSpeed);
+            if (normalizedSpeed === null) return;
+            CONFIG.speed = normalizedSpeed;
             saveConfig();
             videoElement.playbackRate = CONFIG.speed;
-            this.showBezelNotification(`${parseFloat(CONFIG.speed.toFixed(2))}x`);
+            this.showBezelNotification(`${formatSpeed(CONFIG.speed)}x`);
             this.updateSpeedIndicator();
         },
         _wakeUpUI: function () {
@@ -417,13 +470,16 @@ document.addEventListener('DOMContentLoaded', () => {
             setInterval(() => {
                 const video = this.getVideoElement();
                 if (video) {
-                    if (video.src !== lastSrc) {
-                        lastSrc = video.src;
-                        video.playbackRate = CONFIG.speed;
-                        this.updateSpeedIndicator();
-                        video.addEventListener('ratechange', () => this.updateSpeedIndicator());
-                        setTimeout(() => this.applyResolution(), 2500);
-                    }
+	                    if (video.src !== lastSrc) {
+	                        lastSrc = video.src;
+	                        video.playbackRate = CONFIG.speed;
+	                        this.updateSpeedIndicator();
+	                        if (!video.dataset.rateListenerAttached) {
+	                            video.addEventListener('ratechange', () => this.updateSpeedIndicator());
+	                            video.dataset.rateListenerAttached = 'true';
+	                        }
+	                        setTimeout(() => this.applyResolution(), 2500);
+	                    }
                     if (!document.getElementById('yt-speedx-indicator')) {
                         this.updateSpeedIndicator();
                     }
@@ -477,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (currentSpeed !== 1) {
                 const adjustedDuration = player.getDuration() / currentSpeed;
-                indicator.innerText = ` / ${parseFloat(currentSpeed.toFixed(2))}x`;
+                indicator.innerText = ` / ${formatSpeed(currentSpeed)}x`;
                 indicator.title = `Adjusted duration: ${this.getFormattedTime(adjustedDuration)}`;
                 indicator.style.display = 'inline';
             } else {
@@ -488,12 +544,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const player = this.getPlayer();
             if (!player || !videoElement) return;
 
-            CONFIG.speed = +Math.max(0.1, Math.min(newSpeed, 16)).toFixed(1);
+            const normalizedSpeed = normalizeSpeed(newSpeed);
+            if (normalizedSpeed === null) return;
+            CONFIG.speed = normalizedSpeed;
             saveConfig();
             videoElement.playbackRate = CONFIG.speed;
 
             if (CONFIG.speed > 2) {
-                this.showBezelNotification(`${CONFIG.speed.toFixed(1)}x`);
+                this.showBezelNotification(`${formatSpeed(CONFIG.speed)}x`);
             } else if (currentSpeed > 2 && CONFIG.speed === 2) {
                 this.showBezelNotification("2x");
             } else {
@@ -518,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // On the first press of a sequence, sync our state with the player's actual current state.
             if (!qualityChangeState.debounceTimer) {
-                qualityChangeState.availableQualityData = player.getAvailableQualityData(true); // Get all, bypass our filter
+                qualityChangeState.availableQualityData = player.getAvailableQualityData(); // Respect our FPS filter
                 if (qualityChangeState.availableQualityData.length === 0) return;
 
                 const currentQuality = player.getPlaybackQuality();
@@ -935,19 +993,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const closeModal = () => { overlay.style.display = 'none'; modal.style.display = 'none'; };
         const saveAndClose = () => {
             const wasH264Enabled = CONFIG.useH264, wasMaxFpsQuality = CONFIG.max60FpsQuality;
-            CONFIG.speed = parseFloat(document.getElementById('yt-speedx-speed').value);
-            CONFIG.ADJUSTMENT_STEP = parseFloat(document.getElementById('yt-speedx-step').value);
+            const prevSpeed = CONFIG.speed, prevStep = CONFIG.ADJUSTMENT_STEP, prevOpacity = CONFIG.progressBarOpacity, prevBoostSpeed = CONFIG.BOOST_SPEED;
+
+            CONFIG.speed = normalizeSpeed(parseFloat(document.getElementById('yt-speedx-speed').value), prevSpeed);
+            CONFIG.ADJUSTMENT_STEP = normalizeStep(parseFloat(document.getElementById('yt-speedx-step').value), prevStep);
             CONFIG.resolution = document.getElementById('yt-speedx-res').value;
             CONFIG.useH264 = document.getElementById('yt-speedx-h264').checked;
             CONFIG.max60FpsQuality = document.getElementById('yt-speedx-max-fps-quality').value;
             CONFIG.enableFullscreenProgress = document.getElementById('yt-speedx-fullscreen-progress').checked;
-            CONFIG.progressBarOpacity = parseFloat(document.getElementById('yt-speedx-progress-opacity').value);
+            CONFIG.progressBarOpacity = normalizeOpacity(parseFloat(document.getElementById('yt-speedx-progress-opacity').value), prevOpacity);
             CONFIG.RES_DOWN_KEY = document.getElementById('yt-speedx-res-down-key').value;
             CONFIG.RES_UP_KEY = document.getElementById('yt-speedx-res-up-key').value;
             CONFIG.SETTINGS_KEY = document.getElementById('yt-speedx-settings-key').value;
             CONFIG.enableSpeedBoost = document.getElementById('yt-speedx-boost-enable').checked;
             CONFIG.BOOST_KEY = document.getElementById('yt-speedx-boost-key').value;
-            CONFIG.BOOST_SPEED = parseFloat(document.getElementById('yt-speedx-boost-speed').value);
+            CONFIG.BOOST_SPEED = normalizeSpeed(parseFloat(document.getElementById('yt-speedx-boost-speed').value), prevBoostSpeed);
             saveConfig();
             closeModal();
             updateProgressBarVisibility(); // Update visibility in case setting was changed
@@ -985,7 +1045,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoElement) {
             videoElement.playbackRate = originalSpeedBeforeBoost;
             // Show notification on both YouTube and Rutube
-            activeAdapter.showBezelNotification(`${parseFloat(originalSpeedBeforeBoost.toFixed(2))}x`);
+            activeAdapter.showBezelNotification(`${formatSpeed(originalSpeedBeforeBoost)}x`);
         }
         originalSpeedBeforeBoost = null;
     };
@@ -994,14 +1054,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName) || document.getElementById('yt-speedx-modal')?.style.display === 'flex') return;
 
         if (CONFIG.enableSpeedBoost && event.code === CONFIG.BOOST_KEY && !event.repeat) {
-            if (originalSpeedBeforeBoost === null) {
-                const videoElement = activeAdapter.getVideoElement();
-                if (!videoElement) return;
-                originalSpeedBeforeBoost = videoElement.playbackRate;
-                videoElement.playbackRate = CONFIG.BOOST_SPEED;
-                // Show notification on both YouTube and Rutube
-                activeAdapter.showBezelNotification(`${parseFloat(CONFIG.BOOST_SPEED.toFixed(2))}x Boost`);
-                event.preventDefault(); event.stopImmediatePropagation();
+	            if (originalSpeedBeforeBoost === null) {
+	                const videoElement = activeAdapter.getVideoElement();
+	                if (!videoElement) return;
+	                const normalizedBoostSpeed = normalizeSpeed(CONFIG.BOOST_SPEED);
+	                if (normalizedBoostSpeed === null) return;
+	                originalSpeedBeforeBoost = videoElement.playbackRate;
+	                CONFIG.BOOST_SPEED = normalizedBoostSpeed;
+	                videoElement.playbackRate = CONFIG.BOOST_SPEED;
+	                // Show notification on both YouTube and Rutube
+	                activeAdapter.showBezelNotification(`${formatSpeed(CONFIG.BOOST_SPEED)}x Boost`);
+	                event.preventDefault(); event.stopImmediatePropagation();
             }
             return;
         }
@@ -1034,9 +1097,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (boostHandled) {
-                CONFIG.BOOST_SPEED = +Math.max(0.1, Math.min(newBoostSpeed, 16)).toFixed(2);
+                const normalizedBoostSpeed = normalizeSpeed(newBoostSpeed);
+                if (normalizedBoostSpeed === null) return;
+                CONFIG.BOOST_SPEED = normalizedBoostSpeed;
                 videoElement.playbackRate = CONFIG.BOOST_SPEED;
-                activeAdapter.showBezelNotification(`${parseFloat(CONFIG.BOOST_SPEED.toFixed(2))}x Boost`);
+                activeAdapter.showBezelNotification(`${formatSpeed(CONFIG.BOOST_SPEED)}x Boost`);
                 saveConfig();
                 event.preventDefault();
                 event.stopImmediatePropagation();
