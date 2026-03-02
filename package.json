@@ -14,11 +14,11 @@
     "test:e2e:real": "RUN_REAL_E2E=1 npm run build && RUN_REAL_E2E=1 playwright test tests/e2e/real"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "@types/node": "^24.0.0",
-    "esbuild": "^0.25.0",
-    "jsdom": "^24.0.0",
-    "typescript": "^5.6.0",
-    "vitest": "^2.0.0"
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.27.3",
+    "jsdom": "^28.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }
