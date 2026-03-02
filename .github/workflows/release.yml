@@ -25,7 +25,9 @@ jobs:
 
       - name: Get Version from package.json
         id: get_version
-        run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+        run: |
+          VERSION="$(node -p 'require("./package.json").version')"
+          echo "VERSION=${VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Check if tag already exists
         # If a tag already exists for this version, skip to avoid errors.
