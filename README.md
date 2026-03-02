@@ -1,8 +1,8 @@
 # YouTube SpeedX
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.4.1-blue)
-[![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
+![Version](https://img.shields.io/badge/Version-3.0.0-blue)
+[![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js)
 
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
 
@@ -12,10 +12,11 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 
 - **Polished Settings Menu:** Easily configure the script through a professional UI, accessible directly from the YouTube player's settings menu or via hotkey (`Ctrl + Alt + S`).
 - **Custom Default Speed:** Set any default playback speed you like, without floating-point errors.
+- **Consistent Speed Rounding:** Speeds are normalized to 2 decimal places (e.g., `1.25`, `1.30`, `1.35`).
 - **Speed Boost:** Temporarily accelerate video playback by holding a hotkey. The boost speed can be adjusted on-the-fly using the standard speed hotkeys or by pressing a number key (`1-9`).
 - **Fullscreen Progress Bar:** Displays a subtle 1px progress bar at the bottom of the screen when in fullscreen with the UI hidden.
 - **Customizable Speed Step:** Configure the increment/decrement value for speed changes in the settings menu.
-- **Smart FPS Control:** Set a maximum resolution for 60 FPS videos (e.g., limit to 1080p60 or 720p60) or disable them completely to match your hardware's capabilities.
+- **Smart FPS Control:** Set a maximum resolution for 60 FPS videos (e.g., limit to 1080p60 or 720p60) or disable them completely to match your hardware's capabilities. Resolution hotkeys respect this filter.
 - **Dropdown for Resolution:** Choose your preferred default resolution from a clean dropdown list.
 - **Persistent Settings:** Remembers your speed, resolution, and feature choices.
 - **Customizable Hotkeys:** Reliably change the hotkeys for all actions using their physical location on the keyboard (`event.code`).
@@ -28,8 +29,19 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 1.  Install a userscript manager extension for your browser, such as:
     - [Tampermonkey](https://www.tampermonkey.net/) (Recommended)
     - [Violentmonkey](https://violentmonkey.github.io/)
-2.  **[Click here to install the script](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)**
+2.  **[Click here to install the script](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js)** (standard)
+3.  Optional: **[install the minified version](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.min.js)** (smaller, harder to debug)
     *After clicking the link, your userscript manager should open and prompt you for installation.*
+
+### Updating from older installs (≤ 2.x)
+
+Version `3.x` moved the install/update URL to `dist/`, so scripts installed from the old root URL will **not** auto-update.
+
+To update:
+1. Open the new install link above.
+2. Your userscript manager should prompt to install/update the existing script.
+   - If it installs as a separate script, remove/disable the old one to avoid duplicate hotkeys.
+3. Your settings should stay (stored in `localStorage` under `ytSpeedXConfig`).
 
 ## 🛠️ Usage
 

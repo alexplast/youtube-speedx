@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [3.0.0] - 2026-03-02
+
+### Breaking
+- **Distribution:** Install/update URL moved to `dist/`. If you installed from the old root URL, you must reinstall using the new link in `README.md`.
+
+### Added
+- **Build System:** TypeScript source in `src/` bundled via `esbuild` into `dist/` (standard + minified).
+- **Tests:** Added unit tests (Vitest + jsdom) and a Playwright smoke test scaffold.
+- **E2E (Opt-in):** Real-site Playwright checks for YouTube/Rutube via `RUN_REAL_E2E=1`.
+
+### Changed
+- **Refactor:** Split logic into modules and per-site adapters.
+- **Rutube UI:** Removed the progress-bar speed overlay (use the gear menu).
+
+### Fixed
+- **Rutube Quality:** Stealth quality switching (no visible settings menu) and cleaner bezel labels.
+
+## [2.5.1] - 2026-03-02
+
+### Changed
+- **Smart FPS Control:** Resolution hotkeys now respect the 60 FPS quality filter.
+- **Speed Normalization:** Speed and Boost values are now normalized to 2 decimal places for consistent stepping.
+
+### Fixed
+- **YouTube 0.05 Step:** Fixed rounding that caused incorrect speed jumps with `0.05` steps.
+- **Rutube Listener Leak:** Prevented duplicate `ratechange` listeners when switching videos.
+- **Settings Validation:** Added finite-number validation and clamping for speed/step/boost speed/progress opacity.
+
 ## [2.5.0] - 2025-11-28
 
 ### Added

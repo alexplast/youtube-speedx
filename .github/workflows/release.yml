@@ -3,10 +3,10 @@ name: Automatic Release on Push to Main
 on:
   push:
     branches:
-      - main # Запускается только при пуше в ветку main
+      - main # Runs only on pushes to the main branch
 
 permissions:
-  contents: write # Необходимо для создания тега и релиза
+  contents: write # Required to create tags and GitHub Releases
 
 jobs:
   release:
@@ -15,32 +15,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Получаем всю историю, чтобы можно было найти предыдущие теги
+          # Fetch full history so we can resolve previous tags.
           fetch-depth: 0
 
-      - name: Get Version from userscript
+      - name: Get Version from package.json
         id: get_version
-        # Ищем строку, содержащую "@version", извлекаем номер версии с помощью утилиты sed
-        run: echo "VERSION=$(grep "@version" youtubespeedx.userscript.js | sed -n 's/.*@version\s*//p')" >> $GITHUB_OUTPUT
+        run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
 
       - name: Check if tag already exists
-        # Проверяем, существует ли уже тег для этой версии, чтобы избежать ошибок
+        # If a tag already exists for this version, skip to avoid errors.
         run: |
           if git rev-parse "v${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
             echo "Tag v${{ steps.get_version.outputs.VERSION }} already exists. Skipping release."
-            exit 78 # Специальный код выхода для пропуска шагов
+            exit 78 # Special exit code to skip subsequent steps.
           fi
 
       - name: Extract Release Notes from CHANGELOG
         id: extract_notes
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
-          # Используем awk для извлечения содержимого для конкретной версии.
-          # Он начинает печать после нахождения строки с тегом текущей версии
-          # и останавливается, когда находит следующий тег версии или конец файла.
+          # Extract notes for the current version from CHANGELOG.md.
+          # It starts printing after the matching header and stops at the next version header.
           awk '/^## \['"$VERSION"'\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md > releasenotes.md
           
-          # Проверяем, что файл не пустой, иначе версия в CHANGELOG.md не найдена.
+          # Fail if no matching section was found.
           if [ ! -s releasenotes.md ]; then
             echo "Error: Release notes for version v${VERSION} not found in CHANGELOG.md."
             exit 1
@@ -48,14 +46,16 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
-        # Этот шаг выполняется, только если тег не был найден на предыдущем шаге
+        # Runs only if the tag did not already exist.
         if: success()
         with:
-          # Создаем тег и релиз с именем на основе извлеченной версии
+          # Create the tag and GitHub Release.
           tag_name: "v${{ steps.get_version.outputs.VERSION }}"
           name: "Release v${{ steps.get_version.outputs.VERSION }}"
-          # Автоматически извлекает описание из временного файла с заметками
+          # Use notes extracted into a temporary file.
           body_path: "releasenotes.md"
-          # Прикрепляет указанный файл к релизу
-          files: youtubespeedx.userscript.js
+          # Attach built userscripts to the release.
+          files: |
+            dist/youtubespeedx.userscript.js
+            dist/youtubespeedx.userscript.min.js
           token: ${{ secrets.GITHUB_TOKEN }}

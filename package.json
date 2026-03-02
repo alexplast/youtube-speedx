@@ -1,0 +1,24 @@
+{
+  "name": "youtube-speedx",
+  "version": "3.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "A userscript to enhance video viewing with custom speed, resolution control, H.264 forcing, and a settings UI.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:real": "RUN_REAL_E2E=1 npm run build && RUN_REAL_E2E=1 playwright test tests/e2e/real"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}
