@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [3.0.0] - 2026-03-02
+
+### Breaking
+- **Distribution:** Install/update URL moved to `dist/`. If you installed from the old root URL, you must reinstall using the new link in `README.md`.
+
+### Added
+- **Build System:** TypeScript source in `src/` bundled via `esbuild` into `dist/` (standard + minified).
+- **Tests:** Added unit tests (Vitest + jsdom) and a Playwright smoke test scaffold.
+
+### Changed
+- **Refactor:** Split logic into modules and per-site adapters.
+
 ## [2.5.1] - 2026-03-02
 
 ### Changed

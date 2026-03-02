@@ -18,10 +18,9 @@ jobs:
           # Получаем всю историю, чтобы можно было найти предыдущие теги
           fetch-depth: 0
 
-      - name: Get Version from userscript
+      - name: Get Version from package.json
         id: get_version
-        # Ищем строку, содержащую "@version", извлекаем номер версии с помощью утилиты sed
-        run: echo "VERSION=$(grep "@version" youtubespeedx.userscript.js | sed -n 's/.*@version\s*//p')" >> $GITHUB_OUTPUT
+        run: echo "VERSION=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
 
       - name: Check if tag already exists
         # Проверяем, существует ли уже тег для этой версии, чтобы избежать ошибок
@@ -56,6 +55,8 @@ jobs:
           name: "Release v${{ steps.get_version.outputs.VERSION }}"
           # Автоматически извлекает описание из временного файла с заметками
           body_path: "releasenotes.md"
-          # Прикрепляет указанный файл к релизу
-          files: youtubespeedx.userscript.js
+          # Прикрепляет указанные файлы к релизу
+          files: |
+            dist/youtubespeedx.userscript.js
+            dist/youtubespeedx.userscript.min.js
           token: ${{ secrets.GITHUB_TOKEN }}

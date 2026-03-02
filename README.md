@@ -1,8 +1,8 @@
 # YouTube SpeedX
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Version](https://img.shields.io/badge/Version-2.5.1-blue)
-[![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)
+![Version](https://img.shields.io/badge/Version-3.0.0-blue)
+[![Install](https://img.shields.io/badge/Install%20directly-brightgreen?style=flat&logo=tampermonkey)](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js)
 
 A userscript to enhance your video viewing experience with custom speed, resolution control, and improved performance, all managed through a polished and user-friendly settings menu.
 
@@ -29,8 +29,19 @@ A userscript to enhance your video viewing experience with custom speed, resolut
 1.  Install a userscript manager extension for your browser, such as:
     - [Tampermonkey](https://www.tampermonkey.net/) (Recommended)
     - [Violentmonkey](https://violentmonkey.github.io/)
-2.  **[Click here to install the script](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/youtubespeedx.userscript.js)**
+2.  **[Click here to install the script](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js)** (standard)
+3.  Optional: **[install the minified version](https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.min.js)** (smaller, harder to debug)
     *After clicking the link, your userscript manager should open and prompt you for installation.*
+
+### Updating from older installs (≤ 2.x)
+
+Version `3.x` moved the install/update URL to `dist/`, so scripts installed from the old root URL will **not** auto-update.
+
+To update:
+1. Open the new install link above.
+2. Your userscript manager should prompt to install/update the existing script.
+   - If it installs as a separate script, remove/disable the old one to avoid duplicate hotkeys.
+3. Your settings should stay (stored in `localStorage` under `ytSpeedXConfig`).
 
 ## 🛠️ Usage
 
