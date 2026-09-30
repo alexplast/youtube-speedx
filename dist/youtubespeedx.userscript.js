@@ -1,18 +1,19 @@
 // ==UserScript==
 // @name         YouTube SpeedX
 // @namespace    https://github.com/alexplast/youtube-speedx
-// @version      3.0.0
+// @version      3.0.1
 // @description  Polished UI, speed/resolution control, H.264 forcing, managed via a hotkey-accessible settings menu.
 // @author       https://github.com/alexplast
 // @match        https://*.youtube.com/*
 // @icon         https://www.google.com/s2/favicons?domain=youtube.com
 // @match        https://rutube.ru/*
+// @match        https://*.rutube.ru/*
 // @icon         https://www.google.com/s2/favicons?domain=rutube.ru
 // @match        https://*.smotrim.ru/*
 // @icon         https://www.google.com/s2/favicons?domain=smotrim.ru
 // @match        https://*.ivi.ru/*
 // @icon         https://www.google.com/s2/favicons?domain=ivi.ru
-// @match        https://*vgtrk.com*/*
+// @match        https://*.vgtrk.com/*
 // @icon         https://www.google.com/s2/favicons?domain=vgtrk.com
 // @match        https://*.twitch.tv/*
 // @icon         https://www.google.com/s2/favicons?domain=twitch.tv
@@ -21,6 +22,9 @@
 // @match        https://web.telegram.org/*
 // @icon         https://www.google.com/s2/favicons?domain=telegram.org
 // @match        https://vkvideo.ru/*
+// @match        https://*.vkvideo.ru/*
+// @match        https://vk.com/*
+// @match        https://*.vk.com/*
 // @icon         https://www.google.com/s2/favicons?domain=vk.com
 // @downloadURL  https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js
 // @updateURL    https://raw.githubusercontent.com/alexplast/youtube-speedx/main/dist/youtubespeedx.userscript.js
@@ -86,10 +90,11 @@
     if (typeof CONFIG.enableSpeedBoost !== "boolean") CONFIG.enableSpeedBoost = DEFAULT_CONFIG.enableSpeedBoost;
     if (typeof CONFIG.enableFullscreenProgress !== "boolean") CONFIG.enableFullscreenProgress = DEFAULT_CONFIG.enableFullscreenProgress;
     if (typeof CONFIG.resolution !== "string") CONFIG.resolution = DEFAULT_CONFIG.resolution;
-    if (typeof CONFIG.RES_DOWN_KEY !== "string" || !CONFIG.RES_DOWN_KEY) CONFIG.RES_DOWN_KEY = DEFAULT_CONFIG.RES_DOWN_KEY;
-    if (typeof CONFIG.RES_UP_KEY !== "string" || !CONFIG.RES_UP_KEY) CONFIG.RES_UP_KEY = DEFAULT_CONFIG.RES_UP_KEY;
-    if (typeof CONFIG.SETTINGS_KEY !== "string" || !CONFIG.SETTINGS_KEY) CONFIG.SETTINGS_KEY = DEFAULT_CONFIG.SETTINGS_KEY;
-    if (typeof CONFIG.BOOST_KEY !== "string" || !CONFIG.BOOST_KEY) CONFIG.BOOST_KEY = DEFAULT_CONFIG.BOOST_KEY;
+    const isValidKey = (k) => typeof k === "string" && k.trim().length > 0 && k !== "Press a key...";
+    if (!isValidKey(CONFIG.RES_DOWN_KEY)) CONFIG.RES_DOWN_KEY = DEFAULT_CONFIG.RES_DOWN_KEY;
+    if (!isValidKey(CONFIG.RES_UP_KEY)) CONFIG.RES_UP_KEY = DEFAULT_CONFIG.RES_UP_KEY;
+    if (!isValidKey(CONFIG.SETTINGS_KEY)) CONFIG.SETTINGS_KEY = DEFAULT_CONFIG.SETTINGS_KEY;
+    if (!isValidKey(CONFIG.BOOST_KEY)) CONFIG.BOOST_KEY = DEFAULT_CONFIG.BOOST_KEY;
   };
   var loadConfig = () => {
     try {
@@ -151,20 +156,59 @@
     }
   };
 
+  // src/core/bezel.ts
+  var getBezelTargetParent = (activeAdapter) => {
+    var _a;
+    return document.fullscreenElement || activeAdapter.getPlayer() || ((_a = activeAdapter.getVideoElement()) == null ? void 0 : _a.parentElement) || document.body;
+  };
+  var ensureCustomBezel = (activeAdapter) => {
+    const targetParent = getBezelTargetParent(activeAdapter);
+    if (!targetParent) return;
+    let wrapper = document.getElementById("yt-speedx-bezel-wrapper");
+    if (!wrapper) {
+      wrapper = document.createElement("div");
+      wrapper.id = "yt-speedx-bezel-wrapper";
+      const textElement = document.createElement("div");
+      textElement.id = "yt-speedx-bezel-text";
+      wrapper.appendChild(textElement);
+    }
+    if (wrapper.parentElement !== targetParent) {
+      const computed = window.getComputedStyle(targetParent);
+      if (computed.position === "static" && targetParent !== document.body) {
+        targetParent.style.position = "relative";
+      }
+      targetParent.appendChild(wrapper);
+    }
+  };
+  var showCustomBezel = (activeAdapter, text) => {
+    ensureCustomBezel(activeAdapter);
+    const wrapper = document.getElementById("yt-speedx-bezel-wrapper");
+    const textElement = document.getElementById("yt-speedx-bezel-text");
+    if (!wrapper || !textElement) return;
+    textElement.textContent = text;
+    wrapper.classList.remove("yt-speedx-bezel-show");
+    void wrapper.offsetHeight;
+    wrapper.classList.add("yt-speedx-bezel-show");
+  };
+
   // src/adapters/generic.ts
   var GenericAdapter = {
     name: "Generic",
     isMatch: () => true,
     getVideoElement: () => document.querySelector("video"),
     getPlayer: () => null,
-    isControlsHidden: () => false,
-    applySpeed: (videoElement, newSpeed) => {
+    isControlsHidden: () => {
+      const video = document.querySelector("video");
+      return video ? !video.controls || !!document.fullscreenElement : false;
+    },
+    applySpeed: function(videoElement, newSpeed) {
       if (!videoElement) return;
       const normalizedSpeed = normalizeSpeed(newSpeed);
       if (normalizedSpeed === null) return;
       CONFIG.speed = normalizedSpeed;
       videoElement.playbackRate = CONFIG.speed;
       saveConfig();
+      this.showBezelNotification(`${formatSpeed(CONFIG.speed)}x`);
     },
     applyResolution: () => {
     },
@@ -172,7 +216,8 @@
     },
     updateSpeedIndicator: () => {
     },
-    showBezelNotification: () => {
+    showBezelNotification: function(text) {
+      showCustomBezel(this, text);
     }
   };
 
@@ -197,6 +242,7 @@
     settingsPanelId: null
   };
   var rutubeStealthStylesInjected = false;
+  var rutubeInitialized = false;
   var ensureRutubeStealthStyles = () => {
     if (rutubeStealthStylesInjected) return;
     rutubeStealthStylesInjected = true;
@@ -739,6 +785,8 @@
       scheduleExecution();
     },
     onInit: function() {
+      if (rutubeInitialized) return;
+      rutubeInitialized = true;
       ensureRutubeStealthStyles();
       let lastSrc = "";
       setInterval(() => {
@@ -791,7 +839,7 @@
   var VkVideoAdapter = {
     ...GenericAdapter,
     name: "VK Video",
-    isMatch: () => window.location.hostname.includes("vkvideo.ru")
+    isMatch: () => window.location.hostname.includes("vkvideo.ru") || window.location.hostname.includes("vk.com")
   };
 
   // src/adapters/yandexDisk.ts
@@ -872,9 +920,11 @@
       }
     },
     applyResolution: function(playerArg) {
+      var _a;
+      if (CONFIG.resolution === "auto") return;
       const player = playerArg != null ? playerArg : this.getPlayer();
       if (!player || typeof player.getAvailableQualityLevels !== "function") return;
-      const availableLevels = player.getAvailableQualityLevels();
+      const availableLevels = (_a = player.getAvailableQualityLevels()) != null ? _a : [];
       const desiredLevel = CONFIG.resolution;
       if (availableLevels.includes(desiredLevel)) {
         player.setPlaybackQualityRange(desiredLevel);
@@ -934,22 +984,9 @@
     return (_a = platformAdapters.find((adapter) => adapter.isMatch())) != null ? _a : GenericAdapter;
   };
 
-  // src/core/bezel.ts
-  var ensureCustomBezel = (activeAdapter) => {
-    if (activeAdapter.name === "Rutube") return;
-    if (document.getElementById("yt-speedx-bezel-wrapper")) return;
-    const player = document.getElementById("movie_player");
-    if (!player) return;
-    const wrapper = document.createElement("div");
-    wrapper.id = "yt-speedx-bezel-wrapper";
-    const textElement = document.createElement("div");
-    textElement.id = "yt-speedx-bezel-text";
-    wrapper.appendChild(textElement);
-    player.appendChild(wrapper);
-  };
-
   // src/core/fpsPatch.ts
   var filterFormatsByMax60FpsQuality = (formats, max60FpsQuality) => {
+    if (!Array.isArray(formats)) return [];
     if (max60FpsQuality === "unlimited") return formats;
     const qualityHeightMap = {
       "1080": 1080,
@@ -979,11 +1016,12 @@
     player.getAvailableQualityData = function(...args) {
       const [bypassFilter] = args;
       const allFormats = originalGetAvailableQualityData.apply(player, args);
-      if (bypassFilter) return allFormats;
+      if (bypassFilter) return allFormats != null ? allFormats : [];
       return filterFormatsByMax60FpsQuality(allFormats, CONFIG.max60FpsQuality);
     };
     player.getAvailableQualityLevels = function() {
-      return player.getAvailableQualityData().map((format) => format.quality);
+      const data = player.getAvailableQualityData();
+      return Array.isArray(data) ? data.map((format) => format.quality) : [];
     };
     player.isPatchedForFPS = true;
   };
@@ -1001,7 +1039,7 @@
       ensureFullscreenProgressBar();
       progressBar = document.getElementById("yt-speedx-progress-bar");
     }
-    const player = activeAdapter.getPlayer();
+    const player = activeAdapter.getPlayer() || activeAdapter.getVideoElement();
     if (!progressBar || !player) return;
     const isFullscreen = !!document.fullscreenElement;
     const targetParent = isFullscreen ? document.fullscreenElement : document.body;
@@ -1016,9 +1054,27 @@
   };
 
   // src/core/settingsUi.ts
+  var populateFormValues = () => {
+    const speedInput = document.getElementById("yt-speedx-speed");
+    if (!speedInput) return;
+    speedInput.value = String(CONFIG.speed);
+    document.getElementById("yt-speedx-step").value = String(CONFIG.ADJUSTMENT_STEP);
+    document.getElementById("yt-speedx-res").value = CONFIG.resolution;
+    document.getElementById("yt-speedx-h264").checked = CONFIG.useH264;
+    document.getElementById("yt-speedx-max-fps-quality").value = CONFIG.max60FpsQuality;
+    document.getElementById("yt-speedx-fullscreen-progress").checked = CONFIG.enableFullscreenProgress;
+    document.getElementById("yt-speedx-progress-opacity").value = String(CONFIG.progressBarOpacity);
+    document.getElementById("yt-speedx-res-down-key").value = CONFIG.RES_DOWN_KEY;
+    document.getElementById("yt-speedx-res-up-key").value = CONFIG.RES_UP_KEY;
+    document.getElementById("yt-speedx-settings-key").value = CONFIG.SETTINGS_KEY;
+    document.getElementById("yt-speedx-boost-enable").checked = CONFIG.enableSpeedBoost;
+    document.getElementById("yt-speedx-boost-key").value = CONFIG.BOOST_KEY;
+    document.getElementById("yt-speedx-boost-speed").value = String(CONFIG.BOOST_SPEED);
+  };
   var initSettingsUI = (activeAdapter, updateProgressBarVisibility2) => {
     if (document.getElementById("yt-speedx-modal") && document.getElementById("yt-speedx-overlay")) {
       const existingOpen = () => {
+        populateFormValues();
         const overlay2 = document.getElementById("yt-speedx-overlay");
         const modal2 = document.getElementById("yt-speedx-modal");
         overlay2.style.display = "block";
@@ -1141,7 +1197,16 @@
     footer.appendChild(saveBtn);
     modal.append(header, body, footer);
     document.body.append(overlay, modal);
-    GM_addStyle(`
+    const injectStyle = (css) => {
+      if (typeof GM_addStyle === "function") {
+        GM_addStyle(css);
+      } else {
+        const style = document.createElement("style");
+        style.textContent = css;
+        (document.head || document.documentElement).appendChild(style);
+      }
+    };
+    injectStyle(`
     @keyframes ytSpeedX-text-fadeout { 0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; } }
     #yt-speedx-bezel-wrapper { text-align: center; position: absolute; left: 0; right: 0; top: 15%; z-index: 2500; pointer-events: none; opacity: 0; }
     #yt-speedx-bezel-wrapper.yt-speedx-bezel-show { animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards; }
@@ -1184,19 +1249,7 @@
     #yt-speedx-save-btn:hover { background-color: #66baff; }
   `);
     const openModal = () => {
-      document.getElementById("yt-speedx-speed").value = String(CONFIG.speed);
-      document.getElementById("yt-speedx-step").value = String(CONFIG.ADJUSTMENT_STEP);
-      document.getElementById("yt-speedx-res").value = CONFIG.resolution;
-      document.getElementById("yt-speedx-h264").checked = CONFIG.useH264;
-      document.getElementById("yt-speedx-max-fps-quality").value = CONFIG.max60FpsQuality;
-      document.getElementById("yt-speedx-fullscreen-progress").checked = CONFIG.enableFullscreenProgress;
-      document.getElementById("yt-speedx-progress-opacity").value = String(CONFIG.progressBarOpacity);
-      document.getElementById("yt-speedx-res-down-key").value = CONFIG.RES_DOWN_KEY;
-      document.getElementById("yt-speedx-res-up-key").value = CONFIG.RES_UP_KEY;
-      document.getElementById("yt-speedx-settings-key").value = CONFIG.SETTINGS_KEY;
-      document.getElementById("yt-speedx-boost-enable").checked = CONFIG.enableSpeedBoost;
-      document.getElementById("yt-speedx-boost-key").value = CONFIG.BOOST_KEY;
-      document.getElementById("yt-speedx-boost-speed").value = String(CONFIG.BOOST_SPEED);
+      populateFormValues();
       overlay.style.display = "block";
       modal.style.display = "flex";
     };
@@ -1205,7 +1258,7 @@
       modal.style.display = "none";
     };
     const saveAndClose = () => {
-      var _a, _b, _c, _d;
+      var _a, _b, _c, _d, _e, _f, _g, _h;
       const wasH264Enabled = CONFIG.useH264;
       const wasMaxFpsQuality = CONFIG.max60FpsQuality;
       const prevSpeed = CONFIG.speed;
@@ -1219,12 +1272,16 @@
       CONFIG.max60FpsQuality = document.getElementById("yt-speedx-max-fps-quality").value;
       CONFIG.enableFullscreenProgress = document.getElementById("yt-speedx-fullscreen-progress").checked;
       CONFIG.progressBarOpacity = (_c = normalizeOpacity(document.getElementById("yt-speedx-progress-opacity").value, prevOpacity)) != null ? _c : prevOpacity;
-      CONFIG.RES_DOWN_KEY = document.getElementById("yt-speedx-res-down-key").value;
-      CONFIG.RES_UP_KEY = document.getElementById("yt-speedx-res-up-key").value;
-      CONFIG.SETTINGS_KEY = document.getElementById("yt-speedx-settings-key").value;
+      const rawDown = (_d = document.getElementById("yt-speedx-res-down-key")) == null ? void 0 : _d.value;
+      const rawUp = (_e = document.getElementById("yt-speedx-res-up-key")) == null ? void 0 : _e.value;
+      const rawSettings = (_f = document.getElementById("yt-speedx-settings-key")) == null ? void 0 : _f.value;
+      const rawBoost = (_g = document.getElementById("yt-speedx-boost-key")) == null ? void 0 : _g.value;
+      if (rawDown && rawDown.trim() && rawDown !== "Press a key...") CONFIG.RES_DOWN_KEY = rawDown;
+      if (rawUp && rawUp.trim() && rawUp !== "Press a key...") CONFIG.RES_UP_KEY = rawUp;
+      if (rawSettings && rawSettings.trim() && rawSettings !== "Press a key...") CONFIG.SETTINGS_KEY = rawSettings;
       CONFIG.enableSpeedBoost = document.getElementById("yt-speedx-boost-enable").checked;
-      CONFIG.BOOST_KEY = document.getElementById("yt-speedx-boost-key").value;
-      CONFIG.BOOST_SPEED = (_d = normalizeSpeed(document.getElementById("yt-speedx-boost-speed").value, prevBoostSpeed)) != null ? _d : prevBoostSpeed;
+      if (rawBoost && rawBoost.trim() && rawBoost !== "Press a key...") CONFIG.BOOST_KEY = rawBoost;
+      CONFIG.BOOST_SPEED = (_h = normalizeSpeed(document.getElementById("yt-speedx-boost-speed").value, prevBoostSpeed)) != null ? _h : prevBoostSpeed;
       saveConfig();
       closeModal();
       updateProgressBarVisibility2();
@@ -1389,8 +1446,9 @@
     window.addEventListener(
       "keydown",
       (event) => {
-        var _a, _b, _c;
-        if (((_a = event.target) == null ? void 0 : _a.isContentEditable) || ["INPUT", "TEXTAREA", "SELECT"].includes(((_b = event.target) == null ? void 0 : _b.tagName) || "") || ((_c = document.getElementById("yt-speedx-modal")) == null ? void 0 : _c.style.display) === "flex")
+        var _a;
+        const target = event.composedPath ? event.composedPath()[0] : event.target;
+        if ((target == null ? void 0 : target.isContentEditable) || ["INPUT", "TEXTAREA", "SELECT"].includes((target == null ? void 0 : target.tagName) || "") || ((_a = document.getElementById("yt-speedx-modal")) == null ? void 0 : _a.style.display) === "flex")
           return;
         if (CONFIG.enableSpeedBoost && event.code === CONFIG.BOOST_KEY && !event.repeat) {
           if (originalSpeedBeforeBoost === null) {

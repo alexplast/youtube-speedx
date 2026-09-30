@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.html).
 
+## [3.0.1] - 2026-09-30
+
+### Fixed
+- **YouTube Resolution:** Fixed an issue where selecting "Auto" resolution forced maximum quality (4K/1080p). Added null-safety guards during quality checks.
+- **Input Elements Hotkey Leak:** Fixed hotkeys triggering inside input fields, textareas, and comments across Shadow DOM boundaries (`event.composedPath`).
+- **Settings Hotkey Sanitization:** Prevented placeholder (`Press a key...`) or empty values from being stored as active hotkeys.
+- **Cross-Platform Bezel & Progress Bar:** Added fallback resolution for bezel notifications and fullscreen progress bar on generic players (VK Video, Twitch, Ivi, Smotrim, etc.).
+- **Rutube Stability:** Added initialization guard against duplicate intervals on SPA navigation and fixed tabs indentation.
+- **Build & Metadata:** Corrected invalid match patterns in userscript header (`*.vgtrk.com`) and added wildcard patterns for VK and Rutube subdomains.
+- **Tests & Tooling:** Suppressed Node.js 26 runtime deprecation warnings in Playwright test runs.
+
 ## [3.0.0] - 2026-03-02
 
 ### Breaking

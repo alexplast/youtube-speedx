@@ -23,5 +23,15 @@ describe('fps format filter', () => {
     const disabled = filterFormatsByMax60FpsQuality(formats, 'disabled');
     expect(disabled.map(f => f.qualityLabel)).toEqual(['1080p']);
   });
+
+  it('handles null, undefined, or empty formats gracefully', () => {
+    expect(filterFormatsByMax60FpsQuality(null as any, '1080')).toEqual([]);
+    expect(filterFormatsByMax60FpsQuality(undefined as any, '1080')).toEqual([]);
+    expect(filterFormatsByMax60FpsQuality([], '1080')).toEqual([]);
+  });
+
+  it('unlimited returns all formats unchanged', () => {
+    expect(filterFormatsByMax60FpsQuality(formats, 'unlimited')).toBe(formats);
+  });
 });
 

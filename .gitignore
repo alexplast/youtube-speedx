@@ -13,6 +13,9 @@ pnpm-debug.log*
 coverage/
 playwright-report/
 test-results/
+.playwright-browsers/
+.pw-user-data/
+.e2e-real.local.json
 
 # macOS files
 .DS_Store

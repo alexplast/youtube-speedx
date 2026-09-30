@@ -2,9 +2,30 @@ import type { Adapter } from '../adapters/types';
 import { CONFIG, saveConfig } from '../config/storage';
 import { normalizeOpacity, normalizeSpeed, normalizeStep } from '../utils/number';
 
+const populateFormValues = () => {
+  const speedInput = document.getElementById('yt-speedx-speed') as HTMLInputElement | null;
+  if (!speedInput) return;
+  speedInput.value = String(CONFIG.speed);
+  (document.getElementById('yt-speedx-step') as HTMLInputElement).value = String(CONFIG.ADJUSTMENT_STEP);
+  (document.getElementById('yt-speedx-res') as HTMLSelectElement).value = CONFIG.resolution;
+  (document.getElementById('yt-speedx-h264') as HTMLInputElement).checked = CONFIG.useH264;
+  (document.getElementById('yt-speedx-max-fps-quality') as HTMLSelectElement).value = CONFIG.max60FpsQuality;
+  (document.getElementById('yt-speedx-fullscreen-progress') as HTMLInputElement).checked = CONFIG.enableFullscreenProgress;
+  (document.getElementById('yt-speedx-progress-opacity') as HTMLInputElement).value = String(CONFIG.progressBarOpacity);
+
+  (document.getElementById('yt-speedx-res-down-key') as HTMLInputElement).value = CONFIG.RES_DOWN_KEY;
+  (document.getElementById('yt-speedx-res-up-key') as HTMLInputElement).value = CONFIG.RES_UP_KEY;
+  (document.getElementById('yt-speedx-settings-key') as HTMLInputElement).value = CONFIG.SETTINGS_KEY;
+
+  (document.getElementById('yt-speedx-boost-enable') as HTMLInputElement).checked = CONFIG.enableSpeedBoost;
+  (document.getElementById('yt-speedx-boost-key') as HTMLInputElement).value = CONFIG.BOOST_KEY;
+  (document.getElementById('yt-speedx-boost-speed') as HTMLInputElement).value = String(CONFIG.BOOST_SPEED);
+};
+
 export const initSettingsUI = (activeAdapter: Adapter, updateProgressBarVisibility: () => void) => {
   if (document.getElementById('yt-speedx-modal') && document.getElementById('yt-speedx-overlay')) {
     const existingOpen = () => {
+      populateFormValues();
       const overlay = document.getElementById('yt-speedx-overlay') as HTMLElement;
       const modal = document.getElementById('yt-speedx-modal') as HTMLElement;
       overlay.style.display = 'block';
@@ -153,7 +174,17 @@ export const initSettingsUI = (activeAdapter: Adapter, updateProgressBarVisibili
   modal.append(header, body, footer);
   document.body.append(overlay, modal);
 
-  GM_addStyle(`
+  const injectStyle = (css: string) => {
+    if (typeof GM_addStyle === 'function') {
+      GM_addStyle(css);
+    } else {
+      const style = document.createElement('style');
+      style.textContent = css;
+      (document.head || document.documentElement).appendChild(style);
+    }
+  };
+
+  injectStyle(`
     @keyframes ytSpeedX-text-fadeout { 0% { opacity: 0; } 25%, 75% { opacity: 1; } 100% { opacity: 0; } }
     #yt-speedx-bezel-wrapper { text-align: center; position: absolute; left: 0; right: 0; top: 15%; z-index: 2500; pointer-events: none; opacity: 0; }
     #yt-speedx-bezel-wrapper.yt-speedx-bezel-show { animation: ytSpeedX-text-fadeout 1s cubic-bezier(.05,0,0,1) forwards; }
@@ -197,22 +228,7 @@ export const initSettingsUI = (activeAdapter: Adapter, updateProgressBarVisibili
   `);
 
   const openModal = () => {
-    (document.getElementById('yt-speedx-speed') as HTMLInputElement).value = String(CONFIG.speed);
-    (document.getElementById('yt-speedx-step') as HTMLInputElement).value = String(CONFIG.ADJUSTMENT_STEP);
-    (document.getElementById('yt-speedx-res') as HTMLSelectElement).value = CONFIG.resolution;
-    (document.getElementById('yt-speedx-h264') as HTMLInputElement).checked = CONFIG.useH264;
-    (document.getElementById('yt-speedx-max-fps-quality') as HTMLSelectElement).value = CONFIG.max60FpsQuality;
-    (document.getElementById('yt-speedx-fullscreen-progress') as HTMLInputElement).checked = CONFIG.enableFullscreenProgress;
-    (document.getElementById('yt-speedx-progress-opacity') as HTMLInputElement).value = String(CONFIG.progressBarOpacity);
-
-    (document.getElementById('yt-speedx-res-down-key') as HTMLInputElement).value = CONFIG.RES_DOWN_KEY;
-    (document.getElementById('yt-speedx-res-up-key') as HTMLInputElement).value = CONFIG.RES_UP_KEY;
-    (document.getElementById('yt-speedx-settings-key') as HTMLInputElement).value = CONFIG.SETTINGS_KEY;
-
-    (document.getElementById('yt-speedx-boost-enable') as HTMLInputElement).checked = CONFIG.enableSpeedBoost;
-    (document.getElementById('yt-speedx-boost-key') as HTMLInputElement).value = CONFIG.BOOST_KEY;
-    (document.getElementById('yt-speedx-boost-speed') as HTMLInputElement).value = String(CONFIG.BOOST_SPEED);
-
+    populateFormValues();
     overlay.style.display = 'block';
     modal.style.display = 'flex';
   };
@@ -241,12 +257,18 @@ export const initSettingsUI = (activeAdapter: Adapter, updateProgressBarVisibili
     CONFIG.progressBarOpacity =
       normalizeOpacity((document.getElementById('yt-speedx-progress-opacity') as HTMLInputElement).value, prevOpacity) ?? prevOpacity;
 
-    CONFIG.RES_DOWN_KEY = (document.getElementById('yt-speedx-res-down-key') as HTMLInputElement).value;
-    CONFIG.RES_UP_KEY = (document.getElementById('yt-speedx-res-up-key') as HTMLInputElement).value;
-    CONFIG.SETTINGS_KEY = (document.getElementById('yt-speedx-settings-key') as HTMLInputElement).value;
+    const rawDown = (document.getElementById('yt-speedx-res-down-key') as HTMLInputElement)?.value;
+    const rawUp = (document.getElementById('yt-speedx-res-up-key') as HTMLInputElement)?.value;
+    const rawSettings = (document.getElementById('yt-speedx-settings-key') as HTMLInputElement)?.value;
+    const rawBoost = (document.getElementById('yt-speedx-boost-key') as HTMLInputElement)?.value;
+
+    if (rawDown && rawDown.trim() && rawDown !== 'Press a key...') CONFIG.RES_DOWN_KEY = rawDown;
+    if (rawUp && rawUp.trim() && rawUp !== 'Press a key...') CONFIG.RES_UP_KEY = rawUp;
+    if (rawSettings && rawSettings.trim() && rawSettings !== 'Press a key...') CONFIG.SETTINGS_KEY = rawSettings;
 
     CONFIG.enableSpeedBoost = (document.getElementById('yt-speedx-boost-enable') as HTMLInputElement).checked;
-    CONFIG.BOOST_KEY = (document.getElementById('yt-speedx-boost-key') as HTMLInputElement).value;
+    if (rawBoost && rawBoost.trim() && rawBoost !== 'Press a key...') CONFIG.BOOST_KEY = rawBoost;
+
     CONFIG.BOOST_SPEED =
       normalizeSpeed((document.getElementById('yt-speedx-boost-speed') as HTMLInputElement).value, prevBoostSpeed) ?? prevBoostSpeed;
 

@@ -7,7 +7,11 @@ export type QualityFormat = {
   [key: string]: unknown;
 };
 
-export const filterFormatsByMax60FpsQuality = (formats: QualityFormat[], max60FpsQuality: Max60FpsQuality) => {
+export const filterFormatsByMax60FpsQuality = (
+  formats: QualityFormat[] | null | undefined,
+  max60FpsQuality: Max60FpsQuality
+): QualityFormat[] => {
+  if (!Array.isArray(formats)) return [];
   if (max60FpsQuality === 'unlimited') return formats;
 
   const qualityHeightMap: Record<Exclude<Max60FpsQuality, 'unlimited'>, number> = {
@@ -39,13 +43,14 @@ export const patchPlayerForFPS = (player: any) => {
 
   player.getAvailableQualityData = function (...args: unknown[]) {
     const [bypassFilter] = args as [boolean?];
-    const allFormats = originalGetAvailableQualityData.apply(player, args) as QualityFormat[];
-    if (bypassFilter) return allFormats;
+    const allFormats = originalGetAvailableQualityData.apply(player, args) as QualityFormat[] | null | undefined;
+    if (bypassFilter) return allFormats ?? [];
     return filterFormatsByMax60FpsQuality(allFormats, CONFIG.max60FpsQuality);
   };
 
   player.getAvailableQualityLevels = function () {
-    return (player.getAvailableQualityData() as QualityFormat[]).map(format => format.quality);
+    const data = player.getAvailableQualityData() as QualityFormat[] | null | undefined;
+    return Array.isArray(data) ? data.map(format => format.quality) : [];
   };
 
   player.isPatchedForFPS = true;

@@ -15,7 +15,7 @@ export const updateProgressBarVisibility = (activeAdapter: Adapter) => {
     progressBar = document.getElementById('yt-speedx-progress-bar') as HTMLElement | null;
   }
 
-  const player = activeAdapter.getPlayer();
+  const player = activeAdapter.getPlayer() || activeAdapter.getVideoElement();
   if (!progressBar || !player) return;
 
   const isFullscreen = !!document.fullscreenElement;

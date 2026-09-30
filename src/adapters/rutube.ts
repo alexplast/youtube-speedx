@@ -23,6 +23,7 @@ const rutubeResState: {
 };
 
 let rutubeStealthStylesInjected = false;
+let rutubeInitialized = false;
 const ensureRutubeStealthStyles = () => {
   if (rutubeStealthStylesInjected) return;
   rutubeStealthStylesInjected = true;
@@ -583,20 +584,20 @@ export const RutubeAdapter: Adapter = {
     }
   },
   changeResolution: async function (direction: ResolutionDirection) {
-	    if (rutubeResState.sessionActive) {
-	      if (rutubeResState.debounceTimer) clearTimeout(rutubeResState.debounceTimer);
+    if (rutubeResState.sessionActive) {
+      if (rutubeResState.debounceTimer) clearTimeout(rutubeResState.debounceTimer);
 
-	      if (rutubeResState.availableKeys.length === 0) {
-	        rutubeResState.sessionActive = false;
-	        rutubeResState.availableKeys = [];
-	        rutubeResState.availableLabelByKey = {};
-	        rutubeResState.currentSelectionKey = '';
-	        rutubeResState.currentSelectionText = '';
-	        rutubeResState.debounceTimer = null;
-	        await closeSettingsPanel();
-	        exitRutubeStealth();
-	        return;
-	      }
+      if (rutubeResState.availableKeys.length === 0) {
+        rutubeResState.sessionActive = false;
+        rutubeResState.availableKeys = [];
+        rutubeResState.availableLabelByKey = {};
+        rutubeResState.currentSelectionKey = '';
+        rutubeResState.currentSelectionText = '';
+        rutubeResState.debounceTimer = null;
+        await closeSettingsPanel();
+        exitRutubeStealth();
+        return;
+      }
 
       let currentIndex = rutubeResState.availableKeys.indexOf(rutubeResState.currentSelectionKey);
       if (currentIndex === -1) currentIndex = 0;
@@ -615,66 +616,68 @@ export const RutubeAdapter: Adapter = {
       return;
     }
 
-	    rutubeResState.sessionActive = true;
+    rutubeResState.sessionActive = true;
 
-	    enterRutubeStealth();
-	    const items = await openQualityMenu();
-	    if (!items || items.length === 0) {
-	      rutubeResState.sessionActive = false;
-	      this.showBezelNotification('Quality menu not found');
-	      await closeSettingsPanel();
-	      exitRutubeStealth();
-	      return;
-	    }
+    enterRutubeStealth();
+    const items = await openQualityMenu();
+    if (!items || items.length === 0) {
+      rutubeResState.sessionActive = false;
+      this.showBezelNotification('Quality menu not found');
+      await closeSettingsPanel();
+      exitRutubeStealth();
+      return;
+    }
 
-	    const itemsWithQuality = items
-	      .map(btn => {
-	        const label = extractLabel(btn);
-	        const quality = parseQuality(label);
-	        return quality ? { btn, label, quality, key: toQualityKey(quality), selected: isSelectedQualityOption(btn) } : null;
-	      })
-	      .filter((i): i is { btn: HTMLElement; label: string; quality: ParsedQuality; key: string; selected: boolean } => !!i);
+    const itemsWithQuality = items
+      .map(btn => {
+        const label = extractLabel(btn);
+        const quality = parseQuality(label);
+        return quality ? { btn, label, quality, key: toQualityKey(quality), selected: isSelectedQualityOption(btn) } : null;
+      })
+      .filter((i): i is { btn: HTMLElement; label: string; quality: ParsedQuality; key: string; selected: boolean } => !!i);
 
-	    const uniqueByKey = new Map<string, { label: string; quality: ParsedQuality; selected: boolean }>();
-	    for (const item of itemsWithQuality) {
-	      const existing = uniqueByKey.get(item.key);
-	      if (!existing) uniqueByKey.set(item.key, { label: item.label, quality: item.quality, selected: item.selected });
-	      else if (item.selected) existing.selected = true;
-	    }
+    const uniqueByKey = new Map<string, { label: string; quality: ParsedQuality; selected: boolean }>();
+    for (const item of itemsWithQuality) {
+      const existing = uniqueByKey.get(item.key);
+      if (!existing) uniqueByKey.set(item.key, { label: item.label, quality: item.quality, selected: item.selected });
+      else if (item.selected) existing.selected = true;
+    }
 
-	    const sortedOptions = Array.from(uniqueByKey.entries())
-	      .map(([key, val]) => ({ key, ...val }))
-	      .sort((a, b) => b.quality.height - a.quality.height || b.quality.fps - a.quality.fps);
+    const sortedOptions = Array.from(uniqueByKey.entries())
+      .map(([key, val]) => ({ key, ...val }))
+      .sort((a, b) => b.quality.height - a.quality.height || b.quality.fps - a.quality.fps);
 
-	    rutubeResState.availableKeys = sortedOptions.map(o => o.key);
-	    rutubeResState.availableLabelByKey = Object.fromEntries(sortedOptions.map(o => [o.key, o.label]));
+    rutubeResState.availableKeys = sortedOptions.map(o => o.key);
+    rutubeResState.availableLabelByKey = Object.fromEntries(sortedOptions.map(o => [o.key, o.label]));
 
-	    if (rutubeResState.availableKeys.length === 0) {
-	      rutubeResState.sessionActive = false;
-	      this.showBezelNotification('Quality menu not found');
-	      await closeSettingsPanel();
-	      exitRutubeStealth();
-	      return;
-	    }
+    if (rutubeResState.availableKeys.length === 0) {
+      rutubeResState.sessionActive = false;
+      this.showBezelNotification('Quality menu not found');
+      await closeSettingsPanel();
+      exitRutubeStealth();
+      return;
+    }
 
-	    const selectedKey = sortedOptions.find(o => o.selected)?.key ?? '';
-	    let currentIndex = rutubeResState.availableKeys.indexOf(selectedKey);
-	    if (currentIndex === -1) currentIndex = 0;
+    const selectedKey = sortedOptions.find(o => o.selected)?.key ?? '';
+    let currentIndex = rutubeResState.availableKeys.indexOf(selectedKey);
+    if (currentIndex === -1) currentIndex = 0;
 
-	    let newIndex = currentIndex;
-	    if (direction === 'up') newIndex--;
-	    else newIndex++;
+    let newIndex = currentIndex;
+    if (direction === 'up') newIndex--;
+    else newIndex++;
 
-	    if (newIndex < 0) newIndex = 0;
-	    if (newIndex >= rutubeResState.availableKeys.length) newIndex = rutubeResState.availableKeys.length - 1;
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= rutubeResState.availableKeys.length) newIndex = rutubeResState.availableKeys.length - 1;
 
-	    rutubeResState.currentSelectionKey = rutubeResState.availableKeys[newIndex] ?? '';
-	    rutubeResState.currentSelectionText = rutubeResState.availableLabelByKey[rutubeResState.currentSelectionKey] ?? '';
-	    this.showBezelNotification(rutubeResState.currentSelectionText);
+    rutubeResState.currentSelectionKey = rutubeResState.availableKeys[newIndex] ?? '';
+    rutubeResState.currentSelectionText = rutubeResState.availableLabelByKey[rutubeResState.currentSelectionKey] ?? '';
+    this.showBezelNotification(rutubeResState.currentSelectionText);
 
-	    scheduleExecution();
-	  },
+    scheduleExecution();
+  },
   onInit: function () {
+    if (rutubeInitialized) return;
+    rutubeInitialized = true;
     ensureRutubeStealthStyles();
     let lastSrc = '';
     setInterval(() => {

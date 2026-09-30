@@ -4,6 +4,6 @@ import type { Adapter } from './types';
 export const VkVideoAdapter: Adapter = {
   ...GenericAdapter,
   name: 'VK Video',
-  isMatch: () => window.location.hostname.includes('vkvideo.ru')
+  isMatch: () => window.location.hostname.includes('vkvideo.ru') || window.location.hostname.includes('vk.com')
 };
 

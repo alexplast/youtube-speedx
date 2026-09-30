@@ -21,10 +21,11 @@ export const sanitizeConfig = () => {
   if (typeof CONFIG.enableFullscreenProgress !== 'boolean') CONFIG.enableFullscreenProgress = DEFAULT_CONFIG.enableFullscreenProgress;
 
   if (typeof CONFIG.resolution !== 'string') CONFIG.resolution = DEFAULT_CONFIG.resolution;
-  if (typeof CONFIG.RES_DOWN_KEY !== 'string' || !CONFIG.RES_DOWN_KEY) CONFIG.RES_DOWN_KEY = DEFAULT_CONFIG.RES_DOWN_KEY;
-  if (typeof CONFIG.RES_UP_KEY !== 'string' || !CONFIG.RES_UP_KEY) CONFIG.RES_UP_KEY = DEFAULT_CONFIG.RES_UP_KEY;
-  if (typeof CONFIG.SETTINGS_KEY !== 'string' || !CONFIG.SETTINGS_KEY) CONFIG.SETTINGS_KEY = DEFAULT_CONFIG.SETTINGS_KEY;
-  if (typeof CONFIG.BOOST_KEY !== 'string' || !CONFIG.BOOST_KEY) CONFIG.BOOST_KEY = DEFAULT_CONFIG.BOOST_KEY;
+  const isValidKey = (k: unknown): k is string => typeof k === 'string' && k.trim().length > 0 && k !== 'Press a key...';
+  if (!isValidKey(CONFIG.RES_DOWN_KEY)) CONFIG.RES_DOWN_KEY = DEFAULT_CONFIG.RES_DOWN_KEY;
+  if (!isValidKey(CONFIG.RES_UP_KEY)) CONFIG.RES_UP_KEY = DEFAULT_CONFIG.RES_UP_KEY;
+  if (!isValidKey(CONFIG.SETTINGS_KEY)) CONFIG.SETTINGS_KEY = DEFAULT_CONFIG.SETTINGS_KEY;
+  if (!isValidKey(CONFIG.BOOST_KEY)) CONFIG.BOOST_KEY = DEFAULT_CONFIG.BOOST_KEY;
 };
 
 export const loadConfig = () => {

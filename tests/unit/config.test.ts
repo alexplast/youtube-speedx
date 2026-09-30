@@ -35,4 +35,18 @@ describe('config sanitize', () => {
     expect(CONFIG.progressBarOpacity).toBe(0.1);
     expect(CONFIG.max60FpsQuality).toBe('720');
   });
+
+  it('rejects placeholder and empty hotkeys, restoring default', () => {
+    (CONFIG as any).SETTINGS_KEY = 'Press a key...';
+    (CONFIG as any).RES_DOWN_KEY = '   ';
+    (CONFIG as any).RES_UP_KEY = '';
+    (CONFIG as any).BOOST_KEY = 'Press a key...';
+
+    sanitizeConfig();
+
+    expect(CONFIG.SETTINGS_KEY).toBe(DEFAULT_CONFIG.SETTINGS_KEY);
+    expect(CONFIG.RES_DOWN_KEY).toBe(DEFAULT_CONFIG.RES_DOWN_KEY);
+    expect(CONFIG.RES_UP_KEY).toBe(DEFAULT_CONFIG.RES_UP_KEY);
+    expect(CONFIG.BOOST_KEY).toBe(DEFAULT_CONFIG.BOOST_KEY);
+  });
 });

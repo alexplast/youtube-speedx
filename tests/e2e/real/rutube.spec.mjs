@@ -67,8 +67,8 @@ test.describe('Rutube (real site)', () => {
       const text = document.getElementById('yt-speedx-bezel-text')?.textContent?.trim() || '';
       return (
         !!text &&
-        (/\\d{3,4}\\s*p/i.test(text) ||
-          /\\b(4k|2k|full hd|fhd|hd|sd)\\b/i.test(text) ||
+        (/\d{3,4}\s*p/i.test(text) ||
+          /\b(4k|2k|full hd|fhd|hd|sd)\b/i.test(text) ||
           /quality/i.test(text) ||
           /качество/i.test(text))
       );

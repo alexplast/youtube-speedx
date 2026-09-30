@@ -91,10 +91,11 @@ export const YouTubeAdapter: Adapter = {
     }
   },
   applyResolution: function (playerArg) {
+    if (CONFIG.resolution === 'auto') return;
     const player = playerArg ?? this.getPlayer();
     if (!player || typeof player.getAvailableQualityLevels !== 'function') return;
 
-    const availableLevels = player.getAvailableQualityLevels() as string[];
+    const availableLevels = (player.getAvailableQualityLevels() as string[] | undefined | null) ?? [];
     const desiredLevel = CONFIG.resolution;
 
     if (availableLevels.includes(desiredLevel)) {

@@ -114,9 +114,10 @@ export const runApp = () => {
   window.addEventListener(
     'keydown',
     event => {
+      const target = (event.composedPath ? event.composedPath()[0] : event.target) as HTMLElement | null;
       if (
-        (event.target as HTMLElement | null)?.isContentEditable ||
-        ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement | null)?.tagName || '') ||
+        target?.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '') ||
         (document.getElementById('yt-speedx-modal') as HTMLElement | null)?.style.display === 'flex'
       )
         return;

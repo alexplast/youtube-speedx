@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: '**/*.spec.mjs',
   testIgnore: process.env.RUN_REAL_E2E ? [] : ['real/**'],
-  timeout: 30_000,
+  timeout: process.env.RUN_REAL_E2E ? 120_000 : 30_000,
   retries: 0,
   workers: 1,
   fullyParallel: false,
